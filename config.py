@@ -1,0 +1,24 @@
+import os
+from zoneinfo import ZoneInfo
+
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+# Твой Telegram id. Пока не задан — бот на /start просто покажет id.
+OWNER_ID = int(os.getenv("OWNER_ID", "0") or 0)
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-5-5")
+
+# Распознавание голоса (Groq Whisper). Без ключа голосовые не принимаются.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+# Google Calendar через служебный аккаунт. Без них бот работает без календаря.
+GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "")
+EVENT_MINUTES = int(os.getenv("EVENT_MINUTES", "30"))
+
+TZ = ZoneInfo(os.getenv("TZ_NAME", "Europe/Minsk"))
+
+DEFAULT_AREAS = ["EQLBM", "Рейкбек", "Сайт и контент", "Личное"]
+DEFAULT_MORNING = "12:00"
+DEFAULT_EVENING = "18:00"
