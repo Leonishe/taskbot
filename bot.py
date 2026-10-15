@@ -231,7 +231,7 @@ async def main():
         cal = Calendar(C.GOOGLE_SERVICE_ACCOUNT_JSON, C.GOOGLE_CALENDAR_ID, C.TZ, C.EVENT_MINUTES)
         log.info("calendar enabled")
     core = Core(db, C.TZ, C.DEFAULT_AREAS, C.DEFAULT_MORNING, C.DEFAULT_EVENING,
-                parser=Parser(C.ANTHROPIC_API_KEY, C.CLAUDE_MODEL), cal=cal)
+                parser=Parser(C.ANTHROPIC_API_KEY, C.CLAUDE_MODEL, C.DAY_START_HOUR), cal=cal)
 
     bot = Bot(C.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     await bot.set_my_commands([

@@ -22,3 +22,6 @@ TZ = ZoneInfo(os.getenv("TZ_NAME", "Europe/Minsk"))
 DEFAULT_AREAS = ["EQLBM", "Рейкбек", "Сайт и контент", "Личное"]
 DEFAULT_MORNING = "12:00"
 DEFAULT_EVENING = "18:00"
+
+# До этого часа «сегодня/завтра» считаются днём после сна (ты ещё не ложился).
+DAY_START_HOUR = int(os.getenv("DAY_START_HOUR", "6"))

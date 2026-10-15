@@ -35,17 +35,30 @@ TOOL = {
 }
 
 
-def build_system(now: datetime, areas: list[str], tasks: list) -> str:
+def build_system(now: datetime, areas: list[str], tasks: list, history: list[str] | None = None,
+                 day_start: int = 6) -> str:
+    night = now.hour < day_start
+    base = now.date()
+
+    def label(i: int) -> str:
+        if night:
+            return " (сегодня = завтра: день после сна)" if i == 0 else " (послезавтра)" if i == 1 else ""
+        return " (сегодня)" if i == 0 else " (завтра)" if i == 1 else " (послезавтра)" if i == 2 else ""
+
     days = "\n".join(
-        f"{(now + timedelta(days=i)).date().isoformat()} — {WEEKDAYS[(now + timedelta(days=i)).weekday()]}"
-        + (" (сегодня)" if i == 0 else " (завтра)" if i == 1 else "")
+        f"{(base + timedelta(days=i)).isoformat()} — {WEEKDAYS[(base + timedelta(days=i)).weekday()]}{label(i)}"
         for i in range(15))
+    night_rule = (
+        f"\nСейчас ночь ({now:%H:%M}), пользователь ещё не ложился. Для него «сегодня» и «завтра» — это один и тот же "
+        f"день: {base.isoformat()} ({WEEKDAYS[base.weekday()]}), день после сна. «Послезавтра» — следующий за ним.\n"
+        if night else "")
     task_lines = "\n".join(
         f"#{t['id']} | {t['title']} | {t['area'] or '-'} | {t['due_date'] or 'без срока'}"
         for t in tasks[:150]) or "(задач нет)"
-    return f"""Ты — разборщик сообщений в Telegram-боте задач. Пользователь пишет коротко, по-русски, как в заметки.
+    hist = "\n".join(history or []) or "(нет)"
+    return f"""Ты — разборщик сообщений в Telegram-боте задач. Пользователь пишет коротко, по-русски, как в заметки, часто голосом.
 Сейчас: {now.strftime('%Y-%m-%d %H:%M')}, {WEEKDAYS[now.weekday()]}.
-
+{night_rule}
 Календарь на ближайшие дни:
 {days}
 
@@ -54,12 +67,16 @@ def build_system(now: datetime, areas: list[str], tasks: list) -> str:
 Открытые задачи:
 {task_lines}
 
+Предыдущие сообщения за последние минуты и что по ним сделано (это контекст, повторно их не обрабатывай):
+{hist}
+
 Правила:
 - Новая задача или несколько задач в одном сообщении → по action "add" на каждую.
-- title: коротко, с глагола, без даты/времени («Скинуть Кириллу условия по QQ»).
+- title: коротко и близко к словам пользователя, ничего не додумывай. Встреча, приём, созвон — так, как назвал пользователь («Барбер», «Эдгар, психолог», «Кофе с Серёгой в Факторе»); не превращай встречу в «созвониться», если про звонок не сказано. Дело — с глагола («Скинуть Кириллу условия по QQ»). Без даты и времени в title. Явные ошибки распознавания голоса исправляй («Барбар» → «Барбер»).
 - area: выбери самую подходящую из списка сфер. EQLBM — клуб, обучение, игроки, комьюнити. Рейкбек — румы, аффилейт, агенты, выплаты. Сайт и контент — сайт, Instagram, посты, видео. Личное — всё остальное. Если сферы другие — ориентируйся по смыслу.
 - due_date: если срок назван («завтра», «в пятницу», «до конца месяца» → последний день месяца) — дата YYYY-MM-DD. Нет срока — пустая строка.
-- time: только если названо конкретное время («в 15:00», «в 3 дня» → 15:00, «вечером» без времени → пустая строка). Если время назвали без даты — due_date сегодня, а если это время уже прошло — завтра.
+- Слова «затем», «потом», «после этого», «после <предыдущая встреча>» без своей даты — это тот же день, что и в предыдущем сообщении.
+- time: только если названо конкретное время («в 15:00», «в 3 дня» → 15:00, «вечером» без времени → пустая строка). Если время назвали без даты и без связи с предыдущим сообщением — ближайший такой момент в будущем.
 - «Напомни через 2 часа» → due_date и time = сейчас + 2 часа.
 - Сообщение о том, что задача сделана («сделал», «отправил», «готово») → "complete" с task_id подходящей открытой задачи.
 - Просьба перенести/изменить задачу → "edit" с task_id и только изменёнными полями; неизменённые поля не передавай. Чтобы убрать срок или время, передай в due_date или time значение "none".
@@ -70,15 +87,17 @@ def build_system(now: datetime, areas: list[str], tasks: list) -> str:
 
 
 class Parser:
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, day_start: int = 6):
         self.client = AsyncAnthropic(api_key=api_key)
         self.model = model
+        self.day_start = day_start
 
-    async def parse(self, text: str, now: datetime, areas: list[str], tasks: list) -> dict:
+    async def parse(self, text: str, now: datetime, areas: list[str], tasks: list,
+                    history: list[str] | None = None) -> dict:
         msg = await self.client.messages.create(
             model=self.model,
             max_tokens=1024,
-            system=build_system(now, areas, tasks),
+            system=build_system(now, areas, tasks, history, self.day_start),
             tools=[TOOL],
             tool_choice={"type": "tool", "name": "apply_actions"},
             messages=[{"role": "user", "content": text}],

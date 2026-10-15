@@ -1,5 +1,7 @@
 """Вся логика бота без привязки к Telegram: на выходе — список (текст, клавиатура)."""
 import html
+import re
+from collections import deque
 from datetime import date, datetime, time, timedelta
 
 from aiogram.types import InlineKeyboardButton as B, InlineKeyboardMarkup as KB
@@ -32,6 +34,7 @@ class Core:
         self.db, self.tz, self.parser, self.cal = db, tz, parser, cal
         self.default_areas = default_areas
         self.default_morning, self.default_evening = default_morning, default_evening
+        self.history: deque = deque(maxlen=6)  # (время, строка контекста)
 
     def now(self) -> datetime:
         return datetime.now(self.tz)
@@ -243,8 +246,12 @@ class Core:
                 text = (f"Поправка к задаче #{t['id']} «{t['title']}» "
                         f"(сфера: {t['area'] or '-'}, срок: {self.when(t) or 'без срока'}). "
                         f"Используй edit с task_id={t['id']}. Поправка: {text}")
-        res = await self.parser.parse(text, now, await self.areas(), tasks)
-        return await self.apply(res)
+        recent = [line for ts, line in self.history if now - ts < timedelta(minutes=20)]
+        res = await self.parser.parse(text, now, await self.areas(), tasks, recent)
+        out = await self.apply(res)
+        done = "; ".join(html.unescape(re.sub(r"<[^>]+>", "", t)).replace("\n", " ") for t, _ in out)
+        self.history.append((now, f"[{now:%H:%M}] «{text}» → {done}"))
+        return out
 
     async def apply(self, res: dict) -> Out:
         out: Out = []
