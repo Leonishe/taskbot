@@ -1,0 +1,575 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>EQLBM CRM</title><script>window.CRM_USER="__CRM_USER__";</script><style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;padding:0}img{max-width:100%}a.btn{text-decoration:none;color:inherit}</style></head><body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;600&display=swap">
+<style>
+/* Layout: top bar with tabs, one working view below; person card opens as a sheet over it */
+:root{
+  --bg:#F2F3F7; --surface:#FFFFFF; --surface2:#EBEDF3; --line:#D9DCE5;
+  --fg:#161923; --muted:#5F6577; --accent:#4A3ECF; --accent-fg:#FFFFFF; --accent-soft:#E6E3FA;
+  --ok:#17804F; --ok-soft:#DDF2E7; --warn:#A8660E; --warn-soft:#FBEBD2; --bad:#BE3A33; --bad-soft:#FADFDC;
+  --shadow:0 10px 40px rgba(20,22,40,.18);
+  --f-display:"Unbounded","Onest",system-ui,sans-serif;
+  --f-body:"Onest",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1117; --surface:#171A23; --surface2:#1F2330; --line:#2B3041;
+  --fg:#E7E9F0; --muted:#959BAD; --accent:#8F86FF; --accent-fg:#12101F; --accent-soft:#25224A;
+  --ok:#4EC48B; --ok-soft:#173326; --warn:#E3A94B; --warn-soft:#3A2C14; --bad:#F07169; --bad-soft:#3D1D1B;
+  --shadow:0 10px 40px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1117; --surface:#171A23; --surface2:#1F2330; --line:#2B3041;
+  --fg:#E7E9F0; --muted:#959BAD; --accent:#8F86FF; --accent-fg:#12101F; --accent-soft:#25224A;
+  --ok:#4EC48B; --ok-soft:#173326; --warn:#E3A94B; --warn-soft:#3A2C14; --bad:#F07169; --bad-soft:#3D1D1B;
+  --shadow:0 10px 40px rgba(0,0,0,.5); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{max-width:1240px;margin:0 auto;padding-inline:16px;padding-block:0 48px}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;gap:16px;padding-block:14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font-family:var(--f-display);font-weight:600;font-size:17px;letter-spacing:.02em;display:flex;align-items:baseline;gap:6px}
+.brand span{font-size:11px;color:var(--muted);letter-spacing:.14em}
+.brand i{display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-radius:50%;position:relative;top:1px;font-style:normal}
+.brand i::after{content:"";position:absolute;left:-5px;right:-5px;top:4px;height:2px;background:var(--accent)}
+.tabs{display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none}
+.tabs button{border:0;background:none;padding:8px 12px;border-radius:8px;color:var(--muted);font-weight:500;white-space:nowrap;cursor:pointer}
+.tabs button:hover{color:var(--fg);background:var(--surface2)}
+.tabs button[aria-current="true"]{color:var(--fg);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+@media (max-width:640px){.tabs{order:3;flex-basis:100%}.top{gap:10px}.top .brand{flex:1}}
+.tabs b{display:inline-block;min-width:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;line-height:18px;text-align:center}
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn.ghost{border-color:transparent;background:none;color:var(--muted)}
+.btn.ghost:hover{color:var(--fg);background:var(--surface2)}
+.btn.danger{color:var(--bad)}
+.btn.danger.armed{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input,select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+input[type=checkbox]{width:16px;height:16px;padding:0;accent-color:var(--accent)}
+textarea{min-height:72px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+h1,h2,h3{margin:0;text-wrap:balance}
+.vhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-block:22px 14px}
+.vhead h1{font-family:var(--f-display);font-weight:500;font-size:20px}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+.banner{margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--warn-soft);color:var(--warn)}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:860px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tile .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .val.warn{color:var(--warn)} .tile .val.bad{color:var(--bad)}
+.aff{margin-top:14px;display:flex;flex-direction:column;gap:18px}
+.aff-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.aff-head h2{margin:0}.aff-head select{width:auto;min-width:170px}
+.aff-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:28px;align-items:start}
+@media (max-width:760px){.aff-top{grid-template-columns:1fr;gap:16px}}
+.aff-hero{display:flex;flex-direction:column;gap:6px}
+.aff-hero .lbl{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.aff-hero .big{font-family:var(--f-display);font-weight:500;font-size:clamp(30px,5vw,42px);line-height:1.1;color:var(--ok)}
+.aff-hero .big.neg{color:var(--bad)} .aff-hero .sub{color:var(--muted);font-size:13px;max-width:36ch}
+.aff-fc{margin-top:8px;display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);color:var(--accent);font-size:13px}.aff-fc b{font-size:15px}
+.wf{display:flex;flex-direction:column}
+.wf-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.wf-row b{font-weight:500;white-space:nowrap}.wf-row.neg b{color:var(--bad)}
+.wf-row.sum{border-bottom:1px solid var(--line)}.wf-row.sum b,.wf-row.sum span{font-weight:600}
+.wf-row.total{border-bottom:0;font-size:16px;padding-top:10px}.wf-row.total b{color:var(--ok)}.wf-row.total.negv b{color:var(--bad)}
+.wf-note{margin-top:8px;font-size:12.5px;color:var(--muted)}
+.tbl-wrap.flat{border:0;border-radius:0;background:none}
+table.players{table-layout:fixed;min-width:680px}.players col.c-name{width:32%}
+.players td{padding-block:10px}.players .pn{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.players .pk{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+td.num.neg,b.neg{color:var(--bad)} td.dim{color:var(--muted)}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.tile .lbl{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tile .val{font-family:var(--f-display);font-weight:500;font-size:24px;line-height:1.1}
+.tile .sub{font-size:12.5px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:14px;margin-top:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.panel h2{font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.list{display:flex;flex-direction:column}
+.row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);cursor:pointer;min-width:0}
+.row:first-child{border-top:0}
+.row:hover .nm{color:var(--accent)}
+.row .nm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .grow{flex:1;min-width:0;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap;background:var(--surface2);color:var(--muted)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.acc{background:var(--accent-soft);color:var(--accent)}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.funnel{display:flex;flex-direction:column;gap:8px}
+.fbar{display:grid;grid-template-columns:130px 1fr 32px;align-items:center;gap:10px;font-size:13px}
+.fbar .tr{height:8px;border-radius:4px;background:var(--surface2);overflow:hidden}
+.fbar .tr i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.fbar .n{text-align:right;font-weight:600}
+.empty{padding:28px 18px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px;background:var(--surface)}
+.empty b{display:block;color:var(--fg);margin-bottom:4px}
+.tbl-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:720px}
+td textarea{resize:vertical}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--surface2);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--surface2)}
+tr.grp td{background:var(--surface2);font-weight:600}
+tr.tot td{font-weight:700;border-top:2px solid var(--line)}
+td input{padding:5px 8px}
+td input.w80{width:90px;text-align:right}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar input[type=search]{max-width:280px}
+.seg{display:inline-flex;background:var(--surface2);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:5px 11px;border-radius:7px;cursor:pointer;color:var(--muted);font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(230px,1fr);gap:12px;overflow-x:auto;padding-bottom:8px}
+.col{background:var(--surface2);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px}
+.col h3{font-size:12.5px;font-weight:600;display:flex;justify-content:space-between;color:var(--muted);padding:2px 4px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;cursor:pointer}
+.card:hover{border-color:var(--accent)}
+.card .nm{font-weight:600}
+.card select{padding:4px 6px;font-size:12.5px}
+.due{font-size:12.5px} .due.late{color:var(--bad);font-weight:600}
+.form-inline{display:grid;grid-template-columns:2fr 2fr 1fr auto;gap:8px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+@media (max-width:640px){.form-inline{grid-template-columns:1fr 1fr}.form-inline .btn{grid-column:1/-1}}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld>span{font-size:12px;color:var(--muted);font-weight:500}
+/* modal */
+.modal{position:fixed;inset:0;z-index:20;background:rgba(10,12,20,.45);display:flex;justify-content:flex-end}
+.sheet{background:var(--bg);width:min(760px,100%);height:100%;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sh-head{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top,0px)) 16px 12px;border-bottom:1px solid var(--line);background:var(--surface)}
+.sh-head input{font-family:var(--f-display);font-size:17px;font-weight:500;border-color:transparent;background:none;padding:6px 8px}
+.sh-head input:hover{border-color:var(--line)}
+.sh-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.sh-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
+.sh-foot .note{margin-right:auto;font-size:13px;color:var(--muted)}
+.sec{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.sec>h3{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:10px}
+.tagbox{display:flex;gap:8px;flex-wrap:wrap}
+.tagbox label{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;cursor:pointer;font-weight:500}
+.tagbox label:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.lrow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center}
+.lrow.acc{grid-template-columns:1.3fr 1.3fr 80px 80px auto}
+.lrow.accx{grid-template-columns:1.3fr 1fr;margin-top:-4px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+.lrow.accx input{padding:5px 8px;font-size:13px}
+@media (max-width:520px){.lrow.acc{grid-template-columns:1fr 1fr 64px 64px auto;gap:6px}.lrow.acc input,.lrow.acc select{padding:6px}}
+.lrow.plan{grid-template-columns:150px 1fr auto auto}
+@media (max-width:520px){.lrow.plan{grid-template-columns:1fr auto auto}.lrow.plan input[type=month]{grid-column:1/-1}}
+.mini{width:100%;border-collapse:collapse;min-width:0}
+.mini td,.mini th{padding:6px 4px;font-size:13px;border-bottom:1px solid var(--line)}
+.mini th{background:none;padding-top:0}
+.tw{overflow-x:auto}.tw .mini{min-width:560px}.mini tr.mstart td{border-top:2px solid var(--line)}.mini td{vertical-align:top}
+.g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}.g4>div{background:var(--surface2);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}.g4 .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.g4 b{font-size:16px}
+.task-form{display:grid;grid-template-columns:minmax(0,1fr) 150px 140px 200px auto;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px}
+@media (max-width:760px){.task-form{grid-template-columns:1fr 1fr}.task-form input#tf-title{grid-column:1/-1}.task-form .btn{grid-column:1/-1}}
+.stack{display:flex;flex-direction:column;gap:14px;min-width:0}.stack>.btn,.stack>.seg{align-self:flex-start}
+.panel h2 .cnt{display:inline-block;margin-left:6px;padding:0 7px;border-radius:9px;background:var(--surface2);color:var(--fg);font-size:11px;letter-spacing:0}
+.task{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}.task:first-of-type{border-top:0}
+.task .tx{flex:1;min-width:0}.task.done .tx>div{text-decoration:line-through;color:var(--muted)}
+.lnk{font-size:12.5px;color:var(--accent);cursor:pointer}
+.rbrow{cursor:default}.grow2{flex:1;min-width:0;display:flex;flex-direction:column;cursor:pointer}.grow2 .small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.amt{white-space:nowrap}.amt.neg{color:var(--bad)}
+.exp-form{display:grid;grid-template-columns:150px 120px 190px 170px minmax(0,1fr) minmax(0,1fr);gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px}.exp-form .wide{grid-column:1/5}.exp-form .chk{grid-column:5;display:flex;align-items:center;gap:8px;font-weight:500}.exp-form .btn{grid-column:6}
+@media (max-width:900px){.exp-form{grid-template-columns:1fr 1fr}.exp-form .wide,.exp-form .btn,.exp-form .chk{grid-column:1/-1}}
+.note-item{border-top:1px solid var(--line);padding-top:8px;display:flex;gap:10px;align-items:flex-start}
+.note-item p{margin:0;white-space:pre-wrap;flex:1;min-width:0}
+.calc{font-size:13px;color:var(--muted)} .calc b{color:var(--fg)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;box-shadow:var(--shadow);max-width:calc(100% - 32px);font-weight:500}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:sl .18s ease-out}@keyframes sl{from{transform:translateX(24px);opacity:.6}}}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><i aria-hidden="true"></i>EQLBM<span>CRM</span></div>
+    <nav class="tabs" id="tabs" aria-label="Разделы"></nav>
+    <button class="btn primary" data-act="new">+ Человек</button><a class="btn ghost" href="/logout" title="Выйти">Выйти</a>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+  <main id="view"><div class="empty" style="margin-top:24px"><b>Подключаю базу…</b>Данные CRM общие для тебя и помощника.</div></main>
+</div>
+<div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const ST={people:{},payments:{},rake:{},rooms:{},tasks:{},expenses:{}};
+const loaded=new Set();
+let db=null, tab='dash';
+const STAGES=[['new','Новый'],['talk','В диалоге'],['think','Думает'],['won_club','Оплатил клуб'],['won_eqrb','Играет по сделке'],['lost','Отказ']];
+const TAGS=[['lead','Лид'],['club','Клуб'],['student','Ученик'],['eqrb','EQRB']];
+const ACCESS=[['none','Нет доступа'],['paid','Подписка'],['eqrb','Бесплатно (EQRB)'],['og','OG']];
+const SOURCES=['','Telegram-блог','Instagram','HH-сервер','Discord','Сайт','Рекомендация','Другое'];
+const INTEREST=[['club','Клуб'],['eqrb','EQRB'],['both','Клуб + EQRB']];
+const ABI=['','abi5','abi10','abi30','abi50','abi100','abi200+'];
+const METHODS=['USDT TRC20','Перевод в руме','Другое'];
+const EXTRA_ROOMS=['GGPoker','Winamax','PokerStars','PokerOK','Chico','iPoker','WPN','CoinPoker'];
+const PRICE=349, DISC={1:0,3:.10,6:.17,12:.25};
+const MN=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+
+const pad=n=>String(n).padStart(2,'0');
+const isoD=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const today=()=>isoD(new Date());
+const curMonth=()=>today().slice(0,7);
+function prevMonth(){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return d.getFullYear()+'-'+pad(d.getMonth()+1)}
+function addMonths(s,n){const [y,m,d]=s.split('-').map(Number);const dt=new Date(y,m-1+n,d);if(dt.getDate()!==d)dt.setDate(0);return isoD(dt)}
+const days=(a,b)=>Math.round((Date.parse(b)-Date.parse(a))/864e5);
+const fmtD=s=>s?s.split('-').reverse().join('.'):'—';
+const fmtM=s=>{if(!s)return '—';const [y,m]=s.split('-');const n=MN[+m-1]||m;return n[0].toUpperCase()+n.slice(1)+' '+y};
+const money=n=>{const v=Math.round((+n||0)*100)/100;return (v<0?'−':'')+'$'+Math.abs(v).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const clone=o=>JSON.parse(JSON.stringify(o||{}));
+const opts=(arr,sel)=>arr.map(a=>{const [k,l]=Array.isArray(a)?a:[a,a||'—'];return `<option value="${esc(k)}"${String(k)===String(sel??'')?' selected':''}>${esc(l)}</option>`}).join('');
+const tagsOf=p=>p.tags||[];
+const pname=id=>ST.people[id]?.name||'Без имени';
+
+const ui={ef:{date:'',amount:'',cat:'IT-услуги',biz:'eqrb',payee:'',forp:'',note:'',rec:false},ef_per:'all',tf:{title:'',due:'',pid:'',who:'me'},tw:'all',showDone:false,q:'',role:'all',month:prevMonth(),rf:{pid:'',room:'',rake:''},pay:null,note:'',confirm:null,closeAsk:false};
+let editId=null, draft=null, dirty=false;
+
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,3200)}
+function errText(e){const c=e&&e.code;if(c==='invalid_argument')return 'Нет прав на запись. Попроси владельца дать доступ «Редактор».';if(c==='quota_exceeded')return 'База заполнена — удали старые записи.';if(c==='resource_exhausted')return 'Слишком много действий подряд, повтори через секунду.';return 'Не сохранилось: '+(e?.message||'нет связи')}
+async function put(col,id,data){try{await db.collection(col).doc(id).set(data);return true}catch(e){toast(errText(e));return false}}
+async function upd(col,id,data){try{await db.collection(col).doc(id).update(data);return true}catch(e){toast(errText(e));return false}}
+async function del(col,id){try{await db.collection(col).doc(id).delete();return true}catch(e){toast(errText(e));return false}}
+
+function paint(el,html){const a=document.activeElement;const id=a&&a.id&&el.contains(a)?a.id:null;let s=null,e=null;try{s=a.selectionStart;e=a.selectionEnd}catch(_){}
+  const sc=el.querySelector('.sh-body')?.scrollTop;el.innerHTML=html;if(sc!=null){const b=el.querySelector('.sh-body');if(b)b.scrollTop=sc}
+  if(id){const n=document.getElementById(id);if(n){n.focus({preventScroll:true});try{if(s!=null)n.setSelectionRange(s,e)}catch(_){}}}}
+
+/* ---------- derived ---------- */
+function clubState(p){const c=p.club||{};if(!tagsOf(p).includes('club')||!c.access||c.access==='none')return null;
+  if(c.access!=='paid')return {key:'free',cls:'acc',label:ACCESS.find(a=>a[0]===c.access)[1]};
+  if(!c.until)return {key:'nodate',cls:'warn',label:'Нет даты окончания'};
+  const left=days(today(),c.until);
+  if(left<0)return {key:'bad',cls:'bad',label:'Просрочено '+(-left)+' дн',left};
+  if(left<=7)return {key:'warn',cls:'warn',label:left===0?'Заканчивается сегодня':'Продление через '+left+' дн',left};
+  return {key:'ok',cls:'ok',label:'Активна до '+fmtD(c.until),left}}
+function rcalc(r){const room=ST.rooms[r.room]||{};const deal=r.deal??room.deal??0,pay=r.payout??room.payout??0;const inc=(+r.rake||0)*deal/100,out=r.outFixed!=null&&r.outFixed!==''?+r.outFixed:(+r.rake||0)*pay/100;const rf=ST.people[r.personId]?.ref;const refPid=rf&&rf.pid&&+rf.pct&&ST.people[rf.pid]&&(!rf.since||r.month>=rf.since)?rf.pid:null;const ref=refPid?(+r.rake||0)*(+rf.pct)/100:0;return {deal,pay,inc,out,ref,refPid,refPct:refPid?+rf.pct:0,margin:inc-out-ref}}
+function roomName(id){if(!id)return '—';if(id.startsWith('x:'))return id.slice(2);return ST.rooms[id]?.name||'Удалённый рум'}
+function roomOpts(sel,onlyDeal){const rs=Object.entries(ST.rooms).filter(([,r])=>r.active!==false||r===ST.rooms[sel]).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+  let h=rs.map(([id,r])=>`<option value="${esc(id)}"${id===sel?' selected':''}>${esc(r.name)} · ${r.deal??0}/${r.payout??0}</option>`).join('');
+  if(!onlyDeal)h+=EXTRA_ROOMS.map(n=>{const v='x:'+n;return `<option value="${esc(v)}"${v===sel?' selected':''}>${esc(n)} · без сделки</option>`}).join('');return h}
+function dueLeads(){const t=today();return Object.entries(ST.people).filter(([,p])=>tagsOf(p).includes('lead')&&p.lead?.nextDate&&p.lead.nextDate<=t&&!['won_club','won_eqrb','lost'].includes(p.lead?.stage))}
+function unpaidGroups(){const g={};const add=(pid,m,v)=>{const k=pid+'|'+m;(g[k]=g[k]||{pid,month:m,sum:0}).sum+=v};Object.values(ST.rake).forEach(r=>{const c=rcalc(r);if(!r.paid)add(r.personId,r.month,c.out);if(c.refPid&&!r.refPaid)add(c.refPid,r.month,c.ref)});return Object.values(g).filter(x=>x.sum>0).sort((a,b)=>a.month.localeCompare(b.month))}
+
+/* ---------- views ---------- */
+function renderTabs(){const club=Object.values(ST.people).map(clubState).filter(s=>s&&(s.key==='warn'||s.key==='bad')).length;const due=dueLeads().length;
+  const tk=taskCount();const T=[['dash','Сводка',0],['tasks','Задачи',tk],['leads','Лиды',due],['people','Люди',0],['club','Клуб',club],['eqrb','EQRB',0],['exp','Расходы',0],['rooms','Румы',0]];
+  document.getElementById('tabs').innerHTML=T.map(([k,l,n])=>`<button data-tab="${k}" aria-current="${tab===k}">${l}${n?`<b>${n}</b>`:''}</button>`).join('')}
+function render(){renderTabs();if(loaded.size<6)return;const V={dash:vDash,tasks:vTasks,exp:vExp,leads:vLeads,people:vPeople,club:vClub,eqrb:vEqrb,rooms:vRooms}[tab];paint(document.getElementById('view'),V())}
+
+function vDash(){const P=Object.entries(ST.people);const cm=curMonth(),pm=prevMonth();
+  if(!P.length&&!Object.keys(ST.rooms).length)return head('Сводка')+`<div class="empty"><b>База пустая</b>Нажми «+ Человек», чтобы завести первую карточку. Один человек — одна карточка: он может быть лидом, участником клуба, учеником и игроком EQRB одновременно.</div>`;
+  let active=0,free=0;const renew=[],over=[];
+  P.forEach(([id,p])=>{const s=clubState(p);if(!s)return;if(s.key==='free'){free++;return}if(s.key==='ok'||s.key==='warn')active++;if(s.key==='warn'||s.key==='nodate')renew.push([id,p,s]);if(s.key==='bad')over.push([id,p,s])});
+  const payM=Object.values(ST.payments).filter(x=>(x.date||'').startsWith(cm)).reduce((a,x)=>a+(+x.amount||0),0);
+  const ug=unpaidGroups();const unpaid=ug.reduce((a,x)=>a+x.sum,0);
+  const bd=P.map(([id,p])=>{if(!p.birthday)return null;const t=new Date(today());const [,mm,dd]=p.birthday.split('-').map(Number);let n=new Date(t.getFullYear(),mm-1,dd);if(n<t)n=new Date(t.getFullYear()+1,mm-1,dd);const d=Math.round((n-t)/864e5);return d<=7?[id,p,d,n.getFullYear()-+p.birthday.slice(0,4)]:null}).filter(Boolean).sort((a,b)=>a[2]-b[2]);
+  let debt=0,debtN=0;Object.values(ST.rake).forEach(r=>{if(r.partnerUnpaid){debt+=rcalc(r).inc;debtN++}});
+  const due=dueLeads();
+  const att=[...over.map(([id,p,s])=>row(id,p.name,'Клуб',s)),...renew.map(([id,p,s])=>row(id,p.name,'Клуб',s)),
+    ...due.map(([id,p])=>row(id,p.name,p.lead.next||'Следующий шаг',{cls:p.lead.nextDate<today()?'bad':'warn',label:p.lead.nextDate<today()?'Просрочено '+fmtD(p.lead.nextDate):'Сегодня'})),
+    ...bd.map(([id,p,d,age])=>row(id,p.name,age>0&&age<120?'День рождения · '+age+' лет':'День рождения',{cls:'acc',label:d===0?'Сегодня':d===1?'Завтра':'Через '+d+' дн'})),
+    ...ug.map(x=>row(x.pid,pname(x.pid),'Рейкбек · '+fmtM(x.month),{cls:'warn',label:'Выплатить '+money(x.sum)}))];
+  const leads=P.filter(([,p])=>tagsOf(p).includes('lead'));const max=Math.max(1,...STAGES.map(([k])=>leads.filter(([,p])=>(p.lead?.stage||'new')===k).length));
+  return head('Сводка')+`<div class="tiles">
+    ${tile('Клуб',String(active),free?`активных подписок · ещё ${free} бесплатно`:'активных подписок')}
+    ${tile('Оплаты клуба',money(payM),'поступило за '+MN[+cm.slice(5)-1])}
+    ${tile('К выплате',money(unpaid),ug.length?'не отмечено выплат: '+ug.length:'всё выплачено',unpaid>0.004?'warn':'')}
+    ${tile('Долг партнёров',money(debt),debt?'ждём выплат по сделкам':'долгов нет',debt?'bad':'')}
+  </div><div class="grid2">
+    <section class="panel"><h2>Требует внимания</h2>${att.length?`<div class="list">${att.join('')}</div>`:'<p class="muted" style="margin:0">Сейчас ничего не горит: продлений на неделе нет, шаги по лидам не просрочены, рейкбек выплачен.</p>'}</section>
+    <section class="panel"><h2>Воронка лидов</h2>${leads.length?`<div class="funnel">${STAGES.map(([k,l])=>{const n=leads.filter(([,p])=>(p.lead?.stage||'new')===k).length;return `<div class="fbar"><span>${l}</span><span class="tr"><i style="width:${n/max*100}%"></i></span><span class="n">${n}</span></div>`}).join('')}</div>`:'<p class="muted" style="margin:0">Лидов пока нет. Отметь у человека раздел «Лид», и он появится здесь.</p>'}</section>
+  </div>`+dashAff()}
+function dashAff(){const months=[...new Set(Object.values(ST.rake).map(r=>r.month))].sort().reverse();if(!months.length)return '';
+  const per=ui.dp||'all';const years=[...new Set(months.map(m=>m.slice(0,4)))];
+  const inP=m=>per==='all'||m===per||(per.length===4&&m.startsWith(per));
+  const perLabel=per==='all'?'за всё время':per.length===4?'за '+per+' год':'за '+fmtM(per).toLowerCase();
+  const g={};const W={rk:0,inc:0,nr:0,out:0,ownInc:0,ownNr:0};
+  Object.values(ST.rake).forEach(r=>{if(!inP(r.month))return;const c=rcalc(r);const nr=r.partnerUnpaid?c.inc:0;const pay=c.out+c.ref;
+    const x=g[r.personId]=g[r.personId]||{rk:0,inc:0,nr:0,out:0,nicks:new Set()};x.rk+=+r.rake||0;x.inc+=c.inc;x.nr+=nr;x.out+=pay;if(r.nick)x.nicks.add(r.nick.replace(' · доплата',''));
+    W.rk+=+r.rake||0;W.inc+=c.inc;W.nr+=nr;W.out+=pay;if(ST.people[r.personId]?.own){W.ownInc+=c.inc;W.ownNr+=nr}});
+  const EX=Object.values(ST.expenses).filter(e=>e.biz==='eqrb'&&inP((e.date||'').slice(0,7))).reduce((a,e)=>a+(+e.amount||0),0);
+  const got=W.inc-W.nr,net=got-W.out-EX,full=W.inc-W.out-EX;
+  const L=Object.entries(g).sort((a,b)=>b[1].inc-a[1].inc);
+  const step=(l,v,cls='',sign='')=>`<div class="wf-row ${cls}"><span>${l}</span><b>${sign}${money(v)}</b></div>`;
+  return `<section class="panel aff"><div class="aff-head"><h2>Партнёрка EQRB</h2><select id="dp" data-u="dp" data-re="v" aria-label="Период">${opts([['all','За всё время'],...years.map(y=>[y,y+' год']),...months.map(m=>[m,fmtM(m)])],per)}</select></div>
+  <div class="aff-top"><div class="aff-hero"><span class="lbl">Реальный доход ${perLabel}</span><span class="big ${net<0?'neg':''}">${money(net)}</span><span class="sub">Получено от партнёров минус выплаты игрокам, рефералам и расходы на партнёрку.</span>
+    ${W.nr>0.004?`<div class="aff-fc"><span>Когда партнёры закроют долги</span><b>${money(full)}</b></div>`:''}</div>
+    <div class="wf">${step('Начислено по сделкам',W.inc)}${step('Не получено от партнёров',W.nr,'neg','− ')}${step('Получено на руки',got,'sum')}${step('Выплаты игрокам и рефералам',W.out,'neg','− ')}${EX?step('Расходы на партнёрку',EX,'neg','− '):''}${step('Чистыми',net,'sum total'+(net<0?' negv':''))}
+    ${W.ownInc?`<div class="wf-note">В т.ч. твои аккаунты: начислено ${money(W.ownInc)}, получено ${money(W.ownInc-W.ownNr)}</div>`:''}</div></div>
+  <div class="tbl-wrap flat"><table class="players"><colgroup><col class="c-name"><col><col><col><col><col></colgroup><thead><tr><th>Игрок</th><th class="num">Рейк</th><th class="num">Начислено</th><th class="num">Не получено</th><th class="num">Выплаты</th><th class="num">Чистыми</th></tr></thead><tbody>
+  ${L.map(([pid,x])=>{const n=x.inc-x.nr-x.out;return `<tr class="click" data-open="${esc(pid)}"><td><div class="pn">${esc(pname(pid))}</div><div class="pk">${esc([...x.nicks].join(' · '))}</div></td><td class="num">${money(x.rk)}</td><td class="num">${money(x.inc)}</td><td class="num ${x.nr?'neg':'dim'}">${x.nr?money(x.nr):'—'}</td><td class="num">${money(x.out)}</td><td class="num"><b class="${n<0?'neg':''}">${money(n)}</b></td></tr>`}).join('')}
+  <tr class="tot"><td>Итого</td><td class="num">${money(W.rk)}</td><td class="num">${money(W.inc)}</td><td class="num ${W.nr?'neg':'dim'}">${W.nr?money(W.nr):'—'}</td><td class="num">${money(W.out)}</td><td class="num"><b class="${net+EX<0?'neg':''}">${money(net+EX)}</b></td></tr></tbody></table></div>${EX?`<p class="muted small" style="margin:6px 0 0">В таблице — до расходов. Расходы на партнёрку за период: ${money(EX)}, они учтены в «Чистыми» выше.</p>`:''}
+  <p class="muted small" style="margin:10px 0 0">Нажми на игрока — откроются его ники по румам, партнёры, сделки и рейк по месяцам.</p></section>`}
+function autoItems(){const t=today();
+  const subs=Object.entries(ST.people).map(([id,p])=>[id,p,clubState(p)]).filter(([,,s])=>s&&(s.key==='bad'||s.key==='nodate'||(s.left!=null&&s.left<=14))).sort((a,b)=>(a[2].left??-999)-(b[2].left??-999));
+  const rb={};Object.values(ST.rake).forEach(r=>{const c=rcalc(r);if(!r.paid&&c.out>0.004){const x=rb[r.personId]=rb[r.personId]||{sum:0,months:new Set()};x.sum+=c.out;x.months.add(r.month)}if(c.refPid&&!r.refPaid&&c.ref>0.004){const x=rb[c.refPid]=rb[c.refPid]||{sum:0,months:new Set()};x.sum+=c.ref;x.months.add(r.month)}});
+  const pd={};Object.values(ST.rake).forEach(r=>{if(!r.partnerUnpaid)return;const k=ST.rooms[r.room]?.partner||roomName(r.room);const x=pd[k]=pd[k]||{sum:0,months:new Set()};x.sum+=rcalc(r).inc;x.months.add(r.month)});
+  const last={};Object.entries(ST.expenses).forEach(([id,e])=>{if(!e.rec&&!e.recStopped)return;const k=recKey(e);if(!last[k]||(e.date||'')>(last[k][1].date||''))last[k]=[id,e]});
+  const cm=curMonth(),dd=+t.slice(8);const recs=Object.values(last).filter(([,e])=>e.rec&&(e.date||'').slice(0,7)<cm&&dd>=Math.min(28,+(e.date||'').slice(8)||1));
+  return {recs,subs,rb:Object.entries(rb).sort((a,b)=>b[1].sum-a[1].sum),pd:Object.entries(pd),leads:dueLeads()}}
+function taskCount(){const t=today();const a=autoItems();return Object.values(ST.tasks).filter(x=>!x.done&&x.due&&x.due<=t).length+a.recs.length+a.subs.filter(([,,s])=>s.key!=='ok').length+a.rb.length}
+const monthsTxt=set=>[...set].sort().map(m=>fmtM(m)).join(', ');
+function vTasks(){const t=today();const A=autoItems();
+  const T=Object.entries(ST.tasks).filter(([,x])=>ui.tw==='all'||(x.who||'me')===ui.tw);const open=T.filter(([,x])=>!x.done).sort((a,b)=>(a[1].due||'9999').localeCompare(b[1].due||'9999'));const done=T.filter(([,x])=>x.done).sort((a,b)=>(b[1].doneDate||'').localeCompare(a[1].doneDate||''));
+  const people=Object.entries(ST.people).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+  const dueP=d=>!d?'':d<t?`<span class="pill bad">просрочено · ${fmtD(d)}</span>`:d===t?'<span class="pill warn">сегодня</span>':`<span class="pill">${fmtD(d)}</span>`;
+  const task=([id,x])=>`<div class="task ${x.done?'done':''}"><input type="checkbox" data-act="toggleTask" data-id="${esc(id)}"${x.done?' checked':''} aria-label="Готово"><div class="tx"><div>${esc(x.title)} <button class="pill ${(x.who||'me')==='helper'?'acc':''}" style="border:0;cursor:pointer" data-act="whoTask" data-id="${esc(id)}" title="Переназначить">${(x.who||'me')==='helper'?'помощник':'я'} ⇄</button></div>${x.personId&&ST.people[x.personId]?`<span class="lnk" data-open="${esc(x.personId)}">${esc(pname(x.personId))}</span>`:''}</div>${x.done?'':dueP(x.due)}<button class="btn ghost sm danger ${ui.confirm==='task'+id?'armed':''}" data-act="delTask" data-id="${esc(id)}" aria-label="Удалить">${ui.confirm==='task'+id?'Удалить?':'×'}</button></div>`;
+  const sec=(title,count,body,empty)=>`<section class="panel"><h2>${title}${count?` <span class="cnt">${count}</span>`:''}</h2>${body||`<p class="muted small" style="margin:0">${empty}</p>`}</section>`;
+  const subs=A.subs.map(([id,p,s])=>`<div class="row" data-open="${esc(id)}"><span class="nm">${esc(p.name)}</span><span class="grow">${p.club?.until?'до '+fmtD(p.club.until):''}</span><span class="pill ${s.cls}">${esc(s.label)}</span></div>`).join('');
+  const rb=A.rb.map(([pid,x])=>{const p=ST.people[pid]||{};return `<div class="row rbrow"><div class="grow2" data-open="${esc(pid)}"><span class="nm">${esc(pname(pid))}</span><span class="small muted">${esc(monthsTxt(x.months))}${p.usdt?` · USDT ${esc(p.usdt)}`:''}</span></div><b class="amt">${money(x.sum)}</b><button class="btn sm primary" data-act="payPerson" data-id="${esc(pid)}">Выплачено</button></div>`}).join('');
+  const pd=A.pd.map(([k,x])=>`<div class="row" style="cursor:default"><div class="grow2"><span class="nm">${esc(k)}</span><span class="small muted">${esc(monthsTxt(x.months))}</span></div><b class="amt neg">${money(x.sum)}</b></div>`).join('');
+  const leads=A.leads.map(([id,p])=>`<div class="row" data-open="${esc(id)}"><span class="nm">${esc(p.name)}</span><span class="grow">${esc(p.lead.next||'Следующий шаг')}</span>${dueP(p.lead.nextDate)}</div>`).join('');
+  const tf=ui.tf;
+  return head('Текущие задачи')+`<div class="task-form"><input id="tf-title" data-u="tf.title" value="${esc(tf.title)}" placeholder="Новая задача, например: получить отчёт beatdagame по WPN"><input id="tf-due" type="date" data-u="tf.due" value="${esc(tf.due)}" aria-label="Срок"><select id="tf-who" data-u="tf.who" aria-label="Кому">${opts([['me','Мне'],['helper','Помощнику']],tf.who||'me')}</select><select id="tf-pid" data-u="tf.pid" aria-label="Человек"><option value="">Без человека</option>${people.map(([id,p])=>`<option value="${esc(id)}"${id===tf.pid?' selected':''}>${esc(p.name||'Без имени')}</option>`).join('')}</select><button class="btn primary" data-act="addTask">Добавить</button></div>
+  <div class="grid2" style="margin-top:0">
+    <div class="stack"><div class="seg">${[['all','Все задачи'],['me','Мои'],['helper','Помощника']].map(([k,l])=>`<button data-tw="${k}" aria-pressed="${ui.tw===k}">${l}</button>`).join('')}</div>
+      ${sec(ui.tw==='helper'?'Задачи помощника':ui.tw==='me'?'Мои задачи':'Задачи',open.length,open.map(task).join(''),ui.tw==='helper'?'У помощника открытых задач нет. Выбери «Помощнику» в форме выше.':'Открытых задач нет. Добавь первую в поле выше.')}
+      ${done.length?`<button class="btn ghost sm" data-act="showDone">${ui.showDone?'Скрыть':'Показать'} выполненные (${done.length})</button>${ui.showDone?`<section class="panel">${done.map(task).join('')}</section>`:''}`:''}
+      ${sec('Выплатить рейкбек',A.rb.length,rb,'Всё выплачено.')}</div>
+    <div class="stack">${sec('Подписки: продление в ближайшие 14 дней',A.subs.length,subs,'В ближайшие две недели подписки ни у кого не заканчиваются.')}
+      ${A.recs.length?sec('Ежемесячные платежи',A.recs.length,A.recs.map(([id,e])=>`<div class="row rbrow"><div class="grow2"><span class="nm">${esc(e.note||e.cat)}</span><span class="small muted">${esc(e.cat)}${payeeOf(e)?' · '+esc(payeeOf(e)):''} · прошлый платёж ${fmtD(e.date)}</span></div><b class="amt">${money(e.amount)}</b><button class="btn sm primary" data-act="payRec" data-id="${esc(id)}">Оплачено</button><button class="btn sm ghost" data-act="stopRec" data-id="${esc(id)}" title="Больше не напоминать">Стоп</button></div>`).join(''),''):''}
+      ${sec('Ждём от партнёров',A.pd.length,pd,'Партнёры ничего не должны.')}
+      ${A.leads.length?sec('Лиды: пора сделать шаг',A.leads.length,leads,''):''}</div>
+  </div>`}
+const EXCAT=['IT-услуги','Сервер — аренда','Сервер — покупка','Сервер — размещение','Софт','Реклама','Специалисты','Сервисы и подписки','Комиссии','Другое'];
+const payeeOf=e=>e.payeeName||(e.payee&&ST.people[e.payee]?pname(e.payee):'');
+const recKey=e=>[e.cat,payeeOf(e),e.note].join('|');
+const BIZ=[['eqrb','Партнёрка EQRB'],['club','Клуб'],['common','Общее']];
+function vExp(){const E=Object.entries(ST.expenses).sort((a,b)=>(b[1].date||'').localeCompare(a[1].date||''));const ef=ui.ef;if(!ef.date)ef.date=today();
+  const people=Object.entries(ST.people).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+  const pOpts=(sel,empty)=>`<option value="">${empty}</option>`+people.map(([id,p])=>`<option value="${esc(id)}"${id===sel?' selected':''}>${esc(p.name||'Без имени')}</option>`).join('');
+  const months=[...new Set(E.map(([,e])=>(e.date||'').slice(0,7)))].filter(Boolean);const per=ui.ef_per;
+  const F=E.filter(([,e])=>per==='all'||(e.date||'').startsWith(per));
+  const tot=F.reduce((a,[,e])=>a+(+e.amount||0),0);const byCat={},byBiz={};F.forEach(([,e])=>{byCat[e.cat]=(byCat[e.cat]||0)+(+e.amount||0);byBiz[e.biz]=(byBiz[e.biz]||0)+(+e.amount||0)});
+  return head('Расходы',`<select id="ef-per" data-u="ef_per" data-re="v" style="width:auto">${opts([['all','За всё время'],...months.map(m=>[m,fmtM(m)])],per)}</select>`)+
+  `<div class="exp-form"><input id="ef-date" type="date" data-u="ef.date" value="${esc(ef.date)}" aria-label="Дата"><input id="ef-amount" type="number" step="any" data-u="ef.amount" value="${esc(ef.amount)}" placeholder="Сумма, $"><input id="ef-cat" list="dl-cat" data-u="ef.cat" data-re="v" value="${esc(ef.cat)}" placeholder="Категория"><select id="ef-biz" data-u="ef.biz" aria-label="Бизнес">${opts(BIZ,ef.biz)}</select><input id="ef-payee" list="dl-payee" data-u="ef.payee" value="${esc(ef.payee)}" placeholder="Кому платил"><select id="ef-forp" data-u="ef.forp" aria-label="По какому игроку">${pOpts(ef.forp,'По какому игроку (необяз.)')}</select><input id="ef-note" data-u="ef.note" value="${esc(ef.note)}" placeholder="${/софт/i.test(ef.cat)?'Название софта':/сервер/i.test(ef.cat)?'Какой сервер / где стоит':'За что'}" class="wide"><label class="chk"><input type="checkbox" id="ef-rec" data-u="ef.rec"${ef.rec?' checked':''}>Каждый месяц</label><button class="btn primary" data-act="addExp">Добавить</button>
+  <datalist id="dl-cat">${[...new Set([...EXCAT,...E.map(([,e])=>e.cat).filter(Boolean)])].map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+  <datalist id="dl-payee">${[...new Set(['Михаил Техник',...E.map(([,e])=>payeeOf(e)).filter(Boolean)])].map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
+  <div class="tiles" style="margin-bottom:14px">${tile('Всего',money(tot),per==='all'?'за всё время':fmtM(per))}${BIZ.map(([k,l])=>tile(l,money(byBiz[k]||0),Object.entries(byCat).filter(([c])=>F.some(([,e])=>e.biz===k&&e.cat===c)).map(([c])=>c).join(', ')||'нет расходов')).join('')}</div>
+  ${F.length?`<div class="tbl-wrap"><table><thead><tr><th>Дата</th><th class="num">Сумма</th><th>Категория</th><th>Бизнес</th><th>Кому</th><th>За что</th><th></th></tr></thead><tbody>${F.map(([id,e])=>`<tr><td>${fmtD(e.date)}</td><td class="num"><b>${money(e.amount)}</b></td><td><span class="pill">${esc(e.cat||'')}</span>${e.rec?' <span class="pill acc">ежемесячно</span>':''}</td><td class="small">${esc((BIZ.find(b=>b[0]===e.biz)||[])[1]||'')}</td><td>${esc(payeeOf(e)||'—')}</td><td class="small">${esc(e.note||'')}${e.forp&&ST.people[e.forp]?`<br><span class="lnk" data-open="${esc(e.forp)}">игрок: ${esc(pname(e.forp))}</span>`:''}</td><td><button class="btn ghost sm danger ${ui.confirm==='exp'+id?'armed':''}" data-act="delExp" data-id="${esc(id)}">${ui.confirm==='exp'+id?'Удалить?':'×'}</button></td></tr>`).join('')}</tbody></table></div>
+  <p class="muted small">Расходы с пометкой «Партнёрка EQRB» вычитаются из реального дохода на сводке.</p>`:`<div class="empty"><b>Расходов нет</b>Добавь первый через форму выше.</div>`}`}
+const head=(t,extra='')=>`<div class="vhead"><h1>${t}</h1>${extra}</div>`;
+const tile=(l,v,s,tone='')=>`<div class="tile"><span class="lbl">${esc(l)}</span><span class="val ${tone}">${v}</span><span class="sub">${esc(s)}</span></div>`;
+const row=(id,name,sub,s)=>`<div class="row" data-open="${esc(id)}"><span class="nm">${esc(name||'Без имени')}</span><span class="grow">${esc(sub)}</span><span class="pill ${s.cls}">${esc(s.label)}</span></div>`;
+
+function vLeads(){const L=Object.entries(ST.people).filter(([,p])=>tagsOf(p).includes('lead'));
+  if(!L.length)return head('Лиды')+`<div class="empty"><b>Лидов нет</b>Создай человека через «+ Человек» — новая карточка по умолчанию попадает в лиды на этап «Новый».</div>`;
+  const t=today();
+  return head('Лиды',`<span class="muted small">Карточки двигаются выбором этапа</span>`)+`<div class="board">${STAGES.map(([k,l])=>{const C=L.filter(([,p])=>(p.lead?.stage||'new')===k).sort((a,b)=>(a[1].lead?.nextDate||'9').localeCompare(b[1].lead?.nextDate||'9'));
+    return `<div class="col"><h3><span>${l}</span><span>${C.length}</span></h3>${C.map(([id,p])=>{const ld=p.lead||{};const it=INTEREST.find(x=>x[0]===ld.interest);
+      return `<div class="card" data-open="${esc(id)}"><div class="nm">${esc(p.name||'Без имени')}</div>
+      <div class="chips">${it?`<span class="pill acc">${it[1]}</span>`:''}${p.source?`<span class="pill">${esc(p.source)}</span>`:''}</div>
+      ${ld.next?`<div class="small">${esc(ld.next)}</div>`:''}${ld.nextDate?`<div class="due ${ld.nextDate<t&&!['won_club','won_eqrb','lost'].includes(k)?'late':''}">${fmtD(ld.nextDate)}</div>`:''}
+      <select data-stage="${esc(id)}" aria-label="Этап">${opts(STAGES,k)}</select></div>`}).join('')}</div>`}).join('')}</div>`}
+
+function vPeople(){let P=Object.entries(ST.people);const q=ui.q.trim().toLowerCase();
+  if(q)P=P.filter(([,p])=>[p.name,p.tg,p.discord,p.phone,p.note,p.usdt,p.bybit,...(p.accounts||[]).flatMap(a=>[a.nick,a.email])].join(' ').toLowerCase().includes(q));
+  if(ui.role!=='all')P=P.filter(([,p])=>tagsOf(p).includes(ui.role));
+  P.sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+  const bar=`<div class="toolbar"><input type="search" id="q" data-u="q" data-re="v" placeholder="Поиск: имя, ник, Telegram, Discord" value="${esc(ui.q)}"><div class="seg">${[['all','Все'],...TAGS].map(([k,l])=>`<button data-role="${k}" aria-pressed="${ui.role===k}">${l}</button>`).join('')}</div></div>`;
+  if(!Object.keys(ST.people).length)return head('Люди')+`<div class="empty"><b>Пока никого</b>Нажми «+ Человек». В карточке хранятся контакты, ники по румам, подписка, план ученика и рейкбек.</div>`;
+  return head('Люди',`<span class="muted small">${P.length} из ${Object.keys(ST.people).length}</span>`)+bar+(P.length?`<div class="tbl-wrap"><table><thead><tr><th>Имя</th><th>Telegram</th><th>Discord</th><th>Разделы</th><th>Клуб</th><th>Ники</th><th>Следующий шаг</th></tr></thead><tbody>${P.map(([id,p])=>{const s=clubState(p);const ld=p.lead||{};
+    return `<tr class="click" data-open="${esc(id)}"><td><b>${esc(p.name||'Без имени')}</b></td><td>${esc(p.tg||'—')}</td><td>${esc(p.discord||'—')}</td><td><div class="chips">${TAGS.filter(([k])=>tagsOf(p).includes(k)).map(([,l])=>`<span class="pill">${l}</span>`).join('')}</div></td><td>${s?`<span class="pill ${s.cls}">${esc(s.label)}</span>`:'<span class="muted">—</span>'}</td><td class="small">${(p.accounts||[]).filter(a=>a.nick).map(a=>esc(a.nick)+' <span class="muted">'+esc(roomName(a.room))+'</span>').join('<br>')||'<span class="muted">—</span>'}</td><td class="small">${tagsOf(p).includes('lead')&&ld.next?esc(ld.next)+(ld.nextDate?' · '+fmtD(ld.nextDate):''):'<span class="muted">—</span>'}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Никого не нашлось по этому запросу.</div>')}
+
+function vClub(){const M=Object.entries(ST.people).filter(([,p])=>clubState(p));
+  const order={bad:0,nodate:1,warn:2,ok:3,free:4};M.sort((a,b)=>order[clubState(a[1]).key]-order[clubState(b[1]).key]||(a[1].club?.until||'').localeCompare(b[1].club?.until||''));
+  const paid=pid=>Object.values(ST.payments).filter(x=>x.personId===pid).reduce((a,x)=>a+(+x.amount||0),0);
+  const pays=Object.entries(ST.payments).sort((a,b)=>(b[1].date||'').localeCompare(a[1].date||'')).slice(0,40);
+  return head('Клуб',`<span class="muted small">Тариф EQUILIBRIUM · $${PRICE}/мес · 3 мес −10%, 6 мес −17%, 12 мес −25%</span>`)+
+  (M.length?`<div class="tbl-wrap"><table><thead><tr><th>Участник</th><th>Доступ</th><th>С</th><th>До</th><th>Статус</th><th class="num">Цена/мес</th><th class="num">Оплачено всего</th></tr></thead><tbody>${M.map(([id,p])=>{const c=p.club||{};const s=clubState(p);
+    return `<tr class="click" data-open="${esc(id)}"><td><b>${esc(p.name||'Без имени')}</b>${p.tg?` <span class="muted small">${esc(p.tg)}</span>`:''}</td><td>${esc(ACCESS.find(a=>a[0]===c.access)?.[1]||'—')}</td><td>${fmtD(c.since)}</td><td>${c.access==='paid'?fmtD(c.until):'—'}</td><td><span class="pill ${s.cls}">${esc(s.label)}</span></td><td class="num">${c.access==='paid'?money(c.price||PRICE):'—'}</td><td class="num">${money(paid(id))}</td></tr>`}).join('')}</tbody></table></div>`
+  :`<div class="empty"><b>Участников клуба нет</b>Открой карточку человека, отметь раздел «Клуб» и внеси оплату — срок доступа посчитается сам.</div>`)+
+  `<div class="vhead"><h1 style="font-size:16px">Последние оплаты</h1></div>`+(pays.length?`<div class="tbl-wrap"><table><thead><tr><th>Дата</th><th>Участник</th><th class="num">Сумма</th><th>Срок</th><th>Способ</th><th>TXID / комментарий</th></tr></thead><tbody>${pays.map(([,x])=>`<tr class="click" data-open="${esc(x.personId)}"><td>${fmtD(x.date)}</td><td>${esc(pname(x.personId))}</td><td class="num">${money(x.amount)}</td><td>${x.months} мес</td><td>${esc(x.method||'')}</td><td class="small" style="word-break:break-all">${esc(x.txid||'—')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Оплат пока нет.</p>')}
+
+function vEqrb(){const m=ui.month;const R=Object.entries(ST.rake).filter(([,r])=>r.month===m);
+  const players=Object.entries(ST.people).filter(([,p])=>tagsOf(p).includes('eqrb')).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+  const rf=ui.rf;const pl=ST.people[rf.pid];
+  const form=players.length?`<div class="form-inline">
+    <label class="fld"><span>Игрок</span><select id="rf-pid" data-u="rf.pid" data-re="v"><option value="">Выбери игрока</option>${players.map(([id,p])=>`<option value="${esc(id)}"${id===rf.pid?' selected':''}>${esc(p.name||'Без имени')}</option>`).join('')}</select></label>
+    <label class="fld"><span>Рум</span><select id="rf-room" data-u="rf.room"><option value="">Рум со сделкой</option>${roomOpts(rf.room,true)}</select></label>
+    <label class="fld"><span>Рейк за месяц, $</span><input id="rf-rake" type="number" step="any" min="0" data-u="rf.rake" value="${esc(rf.rake)}" placeholder="0"></label>
+    <button class="btn primary" data-act="addRake">Внести</button></div>`
+  :`<div class="empty" style="margin-bottom:12px"><b>Нет игроков EQRB</b>Отметь в карточке человека раздел «EQRB» и добавь его ники по румам — после этого сюда можно вносить рейк.</div>`;
+  const groups={},refs={};R.forEach(([id,r])=>{(groups[r.personId]=groups[r.personId]||[]).push([id,r]);const c=rcalc(r);if(c.refPid){(refs[c.refPid]=refs[c.refPid]||[]).push([id,r,c]);groups[c.refPid]=groups[c.refPid]||[]}});
+  let T={rk:0,inc:0,out:0,mg:0};
+  const body=Object.entries(groups).sort((a,b)=>pname(a[0]).localeCompare(pname(b[0]))).map(([pid,rows])=>{let out=0;const rr=refs[pid]||[];const allPaid=rows.every(([,r])=>r.paid)&&rr.every(([,r])=>r.refPaid);
+    const lines=rows.map(([id,r])=>{const c=rcalc(r);out+=c.out;T.rk+=+r.rake||0;T.inc+=c.inc;T.out+=c.out;T.mg+=c.margin;
+      return `<tr><td class="muted small">${esc(r.nick||'')}</td><td>${esc(roomName(r.room))}${r.est||r.partnerUnpaid!=null||r.note?`<div class="chips" style="margin-top:4px">${r.est?'<span class="pill">Sharkscope</span>':''}${r.partnerUnpaid?`<button class="pill bad" style="border:0;cursor:pointer" data-act="partnerToggle" data-id="${esc(id)}" title="Отметить, что партнёр заплатил">Партнёр должен ${money(c.inc)}</button>`:r.partnerUnpaid===false?`<button class="pill ok" style="border:0;cursor:pointer" data-act="partnerToggle" data-id="${esc(id)}">Партнёр закрыл</button>`:''}</div>${r.note?`<div class="muted small">${esc(r.note)}</div>`:''}`:''}</td><td class="num"><input class="w80" id="rk-${esc(id)}" type="number" step="any" data-rake="${esc(id)}" value="${esc(r.rake)}"></td><td class="num">${c.deal}% / ${c.pay}%</td><td class="num">${money(c.inc)}</td><td class="num">${money(c.out)}</td><td class="num">${money(c.margin)}</td><td>${r.paid?`<span class="pill ok">${r.paidDate?fmtD(r.paidDate):'выплачено'}</span>`:'<span class="pill warn">не выплачено</span>'}</td><td><button class="btn ghost sm danger ${ui.confirm==='rk'+id?'armed':''}" data-act="delRake" data-id="${esc(id)}">${ui.confirm==='rk'+id?'Удалить?':'×'}</button></td></tr>`}).join('')+rr.map(([id,r,c])=>{out+=c.ref;T.out+=c.ref;return `<tr><td class="muted small" colspan="2">Реферальные · ${esc(pname(r.personId))} · ${esc(roomName(r.room))}</td><td class="num muted">${money(r.rake)}</td><td class="num">${c.refPct}%</td><td></td><td class="num">${money(c.ref)}</td><td></td><td>${r.refPaid?`<span class="pill ok">${r.refPaidDate?fmtD(r.refPaidDate):'выплачено'}</span>`:'<span class="pill warn">не выплачено</span>'}</td><td></td></tr>`}).join('');
+    return `<tr class="grp"><td colspan="5"><span data-open="${esc(pid)}" style="cursor:pointer">${esc(pname(pid))}</span>${ST.people[pid]?.usdt?` <span class="muted small" style="font-weight:400;word-break:break-all">USDT ${esc(ST.people[pid].usdt)}</span>`:''}</td><td class="num">${money(out)}</td><td></td><td colspan="2"><button class="btn sm ${allPaid?'':'primary'}" data-act="payGroup" data-id="${esc(pid)}">${allPaid?'Снять отметку':'Выплачено'}</button></td></tr>`+lines}).join('');
+  return head('EQRB · рейкбек',`<label class="fld" style="flex-direction:row;align-items:center;gap:8px"><span>Месяц</span><input type="month" id="mon" data-u="month" data-re="v" value="${esc(m)}" style="width:auto"></label>`)+form+
+  (R.length?`<div class="tbl-wrap"><table><thead><tr><th>Ник</th><th>Рум</th><th class="num">Рейк</th><th class="num">Сделка / игроку</th><th class="num">Твой доход</th><th class="num">Игроку</th><th class="num">Маржа</th><th>Выплата</th><th></th></tr></thead><tbody>${body}<tr class="tot"><td colspan="2">Итого · ${fmtM(m)}</td><td class="num">${money(T.rk)}</td><td></td><td class="num">${money(T.inc)}</td><td class="num">${money(T.out)}</td><td class="num">${money(T.mg)}</td><td colspan="2"></td></tr></tbody></table></div>
+  <p class="muted small">Ставки фиксируются в записи на момент внесения: если позже поменяешь сделку в «Румах», старые месяцы не пересчитаются.</p>`
+  :`<div class="empty"><b>${fmtM(m)}: записей нет</b>Выбери игрока и рум выше и внеси рейк из закрытого месячного отчёта. Доход, выплата игроку и маржа посчитаются по ставкам рума.</div>`)}
+
+function vRooms(){const R=Object.entries(ST.rooms).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+  return head('Румы и сделки',`<button class="btn" data-act="addRoom">+ Сделка</button>`)+(R.length?`<div class="tbl-wrap"><table><thead><tr><th>Рум / сделка</th><th>Партнёр</th><th class="num">Твоя сделка, %</th><th class="num">Игроку, %</th><th class="num">Маржа, %</th><th>База</th><th>Активен</th><th></th></tr></thead><tbody>${R.map(([id,r])=>`<tr>
+    <td><input id="rn-${esc(id)}" data-room="${esc(id)}" data-k="name" value="${esc(r.name)}" style="min-width:180px"><textarea id="rnt-${esc(id)}" data-room="${esc(id)}" data-k="note" placeholder="Условия для игроков, ограничения" style="min-height:0;height:auto;margin-top:6px;font-size:12.5px;padding:5px 8px" rows="${r.note?Math.min(6,String(r.note).split('\n').length+1):1}">${esc(r.note||'')}</textarea></td>
+    <td><input id="rpt-${esc(id)}" data-room="${esc(id)}" data-k="partner" value="${esc(r.partner||'')}" placeholder="Кто даёт сделку, контакт" style="min-width:170px"></td>
+    <td class="num"><input class="w80" id="rd-${esc(id)}" type="number" step="any" data-room="${esc(id)}" data-k="deal" value="${esc(r.deal)}"></td>
+    <td class="num"><input class="w80" id="rp-${esc(id)}" type="number" step="any" data-room="${esc(id)}" data-k="payout" value="${esc(r.payout)}"></td>
+    <td class="num"><b>${(+r.deal||0)-(+r.payout||0)}%</b></td>
+    <td><select id="rb-${esc(id)}" data-room="${esc(id)}" data-k="basis" style="width:auto">${opts([['netrev','Netrev / RS'],['gross','Gross']],r.basis)}</select></td>
+    <td><input type="checkbox" id="ra-${esc(id)}" data-room="${esc(id)}" data-k="active"${r.active!==false?' checked':''} aria-label="Активен"></td>
+    <td><button class="btn ghost sm danger ${ui.confirm==='room'+id?'armed':''}" data-act="delRoom" data-id="${esc(id)}">${ui.confirm==='room'+id?'Удалить?':'×'}</button></td></tr>`).join('')}</tbody></table></div>
+    <p class="muted small">Одна строка = один рум через одного партнёра. Если рум идёт через двух партнёров, это две строки. Изменения сохраняются сразу, неактивные сделки не предлагаются при вводе рейка.</p>`:`<div class="empty"><b>Румов нет</b>Добавь рум и укажи свою сделку и процент игроку.</div>`)}
+
+/* ---------- person sheet ---------- */
+const gp=p=>p.split('.').reduce((o,k)=>o==null?undefined:o[k],draft);
+function setPath(o,path,v){const ks=path.split('.');let c=o;ks.slice(0,-1).forEach((k,i)=>{if(c[k]==null||typeof c[k]!=='object')c[k]=/^\d+$/.test(ks[i+1])?[]:{};c=c[k]});c[ks[ks.length-1]]=v}
+const fid=p=>'f-'+p.replace(/\./g,'-');
+const fi=(p,o={})=>`<input id="${fid(p)}" type="${o.type||'text'}" data-f="${p}" value="${esc(gp(p)??'')}"${o.ph?` placeholder="${esc(o.ph)}"`:''}${o.type==='number'?' step="any"':''}>`;
+const fs=(p,arr,re)=>`<select id="${fid(p)}" data-f="${p}"${re?' data-re="m"':''}>${opts(arr,gp(p))}</select>`;
+const ft=(p,ph)=>`<textarea id="${fid(p)}" data-f="${p}" placeholder="${esc(ph||'')}">${esc(gp(p)??'')}</textarea>`;
+const fl=(l,c)=>`<label class="fld"><span>${l}</span>${c}</label>`;
+
+function openPerson(id){editId=id;draft=clone(ST.people[id]);if(!draft.tags)draft.tags=[];dirty=false;ui.closeAsk=false;ui.confirm=null;ui.note='';resetPay();renderModal();document.getElementById('modal').hidden=false}
+function newPerson(){editId=uid();draft={name:'',tags:['lead'],lead:{stage:'new',interest:'club'},createdAt:today()};dirty=false;ui.closeAsk=false;ui.confirm=null;ui.note='';resetPay();renderModal();document.getElementById('modal').hidden=false;setTimeout(()=>document.getElementById('f-name')?.focus(),30)}
+function resetPay(){const pr=draft?.club?.price||PRICE;ui.pay={date:today(),months:'1',amount:String(pr),method:METHODS[0],txid:''}}
+function closeModal(force){if(dirty&&!force){ui.closeAsk=true;renderModal();return}document.getElementById('modal').hidden=true;editId=null;draft=null;dirty=false}
+
+function renderModal(){if(!draft)return;const has=t=>draft.tags.includes(t);const exists=!!ST.people[editId];
+  let h=`<div class="sh-head"><input id="f-name" data-f="name" value="${esc(draft.name||'')}" placeholder="Имя или ник" aria-label="Имя"><button class="btn ghost" data-act="close" aria-label="Закрыть">✕</button></div><div class="sh-body">`;
+  h+=`<section class="sec"><h3>Разделы</h3><div class="tagbox">${TAGS.map(([k,l])=>`<label><input type="checkbox" data-tag="${k}"${has(k)?' checked':''}>${l}</label>`).join('')}</div></section>`;
+  h+=`<section class="sec"><h3>Контакты</h3><div class="g2">${fl('Telegram',fi('tg',{ph:'@username'}))}${fl('Discord',fi('discord'))}${fl('Телефон',fi('phone',{ph:'+7…'}))}${fl('День рождения <span class="muted">(год неизвестен — ставь 1900)</span>',fi('birthday',{type:'date'}))}${fl('Откуда пришёл',fs('source',SOURCES))}${fl('USDT (TRC20)',fi('usdt',{ph:'T…'}))}${fl('Bybit ID',fi('bybit'))}</div>${fl('Заметка',ft('note','Что важно помнить о человеке'))}</section>`;
+  const acc=draft.accounts||[];
+  h+=`<section class="sec"><h3>Ники по румам <button class="btn sm" data-act="addAcc">+ Ник</button></h3>${acc.length?`<div class="lrow acc small muted"><span>Рум</span><span>Ник</span><span>Сделка %</span><span>Игроку %</span><span></span></div>`+acc.map((a,i)=>{const rr=ST.rooms[a.room];return `<div class="lrow acc"><select id="${fid('accounts.'+i+'.room')}" data-f="accounts.${i}.room" data-re="m" aria-label="Рум"><option value="">Рум</option>${roomOpts(a.room,false)}</select>${fi('accounts.'+i+'.nick',{ph:'Ник'})}${rr?fi('accounts.'+i+'.deal',{type:'number',ph:String(rr.deal??'')})+fi('accounts.'+i+'.payout',{type:'number',ph:String(rr.payout??'')}):'<span></span><span></span>'}<button class="btn ghost sm" data-act="delAcc" data-i="${i}" aria-label="Убрать ник">✕</button></div><div class="lrow accx">${fi('accounts.'+i+'.email',{ph:'Email или ID аккаунта'})}${fi('accounts.'+i+'.regDate',{type:'date'})}</div>`}).join('')+`<p class="muted small" style="margin:0">Пустые проценты = ставки рума. Заполняй, если у игрока индивидуальные условия.</p>`:'<p class="muted small" style="margin:0">Ники нужны для поиска и для учёта рейка EQRB.</p>'}</section>`;
+  if(has('lead'))h+=`<section class="sec"><h3>Лид</h3><div class="g2">${fl('Этап',fs('lead.stage',STAGES))}${fl('Интерес',fs('lead.interest',INTEREST))}</div><div class="g2">${fl('Следующий шаг',fi('lead.next',{ph:'Например: скинуть гайд CoinPoker'}))}${fl('Когда',fi('lead.nextDate',{type:'date'}))}</div></section>`;
+  if(has('club')){const c=draft.club||{};const s=clubState(draft);const pays=Object.entries(ST.payments).filter(([,x])=>x.personId===editId).sort((a,b)=>(b[1].date||'').localeCompare(a[1].date||''));const P=ui.pay;
+    h+=`<section class="sec"><h3>Клуб ${s?`<span class="pill ${s.cls}">${esc(s.label)}</span>`:''}</h3><div class="g2">${fl('Доступ',fs('club.access',ACCESS,true))}${fl('Участник с',fi('club.since',{type:'date'}))}${c.access==='paid'?fl('Доступ до',fi('club.until',{type:'date'}))+fl('Цена за месяц, $',fi('club.price',{type:'number',ph:String(PRICE)})):''}</div>`;
+    if(c.access==='paid'||!c.access||c.access==='none'){h+=`<div style="border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px"><b class="small">Внести оплату</b><div class="g2">
+      ${fl('Дата',`<input type="date" id="pay-date" data-u="pay.date" value="${esc(P.date)}">`)}
+      ${fl('Срок',`<select id="pay-months" data-u="pay.months" data-re="m">${opts([['1','1 месяц'],['3','3 месяца · −10%'],['6','6 месяцев · −17%'],['12','12 месяцев · −25%']],P.months)}</select>`)}
+      ${fl('Сумма, $',`<input type="number" step="any" id="pay-amount" data-u="pay.amount" value="${esc(P.amount)}">`)}
+      ${fl('Способ',`<select id="pay-method" data-u="pay.method">${opts(METHODS,P.method)}</select>`)}</div>
+      ${fl('TXID или комментарий',`<input id="pay-txid" data-u="pay.txid" value="${esc(P.txid)}" placeholder="Хэш транзакции или «перевод на CoinPoker»">`)}
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span class="calc">Доступ продлится до <b>${fmtD(addMonths(c.until&&c.until>=P.date?c.until:P.date,+P.months))}</b></span><button class="btn primary" data-act="addPay">Внести оплату</button></div></div>`}
+    if(pays.length)h+=`<table class="mini"><thead><tr><th>Дата</th><th>Сумма</th><th>Срок</th><th>Способ</th><th></th></tr></thead><tbody>${pays.map(([id,x])=>`<tr><td>${fmtD(x.date)}</td><td>${money(x.amount)}</td><td>${x.months} мес</td><td class="small">${esc(x.method||'')}${x.txid?`<br><span class="muted" style="word-break:break-all">${esc(x.txid)}</span>`:''}</td><td><button class="btn ghost sm danger ${ui.confirm==='pay'+id?'armed':''}" data-act="delPay" data-id="${esc(id)}">${ui.confirm==='pay'+id?'Удалить?':'×'}</button></td></tr>`).join('')}</tbody></table>`;
+    h+=`</section>`}
+  if(has('student')){const st=draft.student||{};const plan=st.plan||[];const notes=st.notes||[];
+    h+=`<section class="sec"><h3>Ученик</h3><div class="g2">${fl('Лимит',fs('student.abi',ABI))}${fl('Разбор базы на старте',fi('student.reviewDate',{type:'date'}))}</div>${fl('Выводы разбора базы',ft('student.review','Лики, сильные стороны, что править в первую очередь'))}
+    <div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;align-items:center"><b class="small">План развития по месяцам</b><button class="btn sm" data-act="addPlan">+ Месяц</button></div>
+    ${plan.map((x,i)=>`<div class="lrow plan">${fi('student.plan.'+i+'.month',{type:'month'})}${fi('student.plan.'+i+'.goal',{ph:'Цель месяца'})}<label style="display:flex;gap:6px;align-items:center" class="small"><input type="checkbox" id="${fid('student.plan.'+i+'.done')}" data-f="student.plan.${i}.done"${x.done?' checked':''}>готово</label><button class="btn ghost sm" data-act="delPlan" data-i="${i}" aria-label="Убрать месяц">✕</button></div>`).join('')||'<p class="muted small" style="margin:0">План составляется после разбора базы.</p>'}</div>
+    <div style="display:flex;flex-direction:column;gap:8px"><b class="small">Заметки по работе</b><textarea id="note-new" data-u="note" placeholder="Что разобрали на тренировке, результаты, домашка">${esc(ui.note)}</textarea><div><button class="btn sm" data-act="addNote">Добавить заметку</button></div>
+    ${notes.map((n,i)=>`<div class="note-item"><span class="muted small" style="white-space:nowrap">${fmtD(n.date)}</span><p>${esc(n.text)}</p><button class="btn ghost sm" data-act="delNote" data-i="${i}" aria-label="Удалить заметку">✕</button></div>`).join('')}</div></section>`}
+  if(has('eqrb')){
+    const acc=(draft.accounts||[]).filter(a=>a.room&&ST.rooms[a.room]);
+    const R=Object.entries(ST.rake).filter(([,r])=>r.personId===editId).sort((x,y)=>y[1].month.localeCompare(x[1].month)||roomName(x[1].room).localeCompare(roomName(y[1].room)));
+    const RF=Object.entries(ST.rake).filter(([,r])=>rcalc(r).refPid===editId).sort((x,y)=>y[1].month.localeCompare(x[1].month));
+    let T={rk:0,inc:0,out:0,mg:0},unpaid=0,debt=0;
+    const status=(r,c)=>[r.paid?'<span class="pill ok">выплачено</span>':(c.out>0?'<span class="pill warn">не выплачено</span>':''),r.partnerUnpaid?'<span class="pill bad">партнёр должен</span>':'',r.est?'<span class="pill">Sharkscope</span>':''].join(' ');
+    let lastM='';const rows=R.map(([id,r])=>{const c=rcalc(r);T.rk+=+r.rake||0;T.inc+=c.inc;T.out+=c.out+c.ref;T.mg+=c.margin;if(!r.paid)unpaid+=c.out;if(r.partnerUnpaid)debt+=c.inc;
+      const m=r.month!==lastM?fmtM(r.month):'';lastM=r.month;
+      return `<tr${m?' class="mstart"':''}><td>${m}</td><td>${esc(roomName(r.room))}<br><span class="muted">${esc(r.nick||'')}</span>${r.note?`<br><span class="muted">${esc(r.note)}</span>`:''}</td><td class="num">${money(r.rake)}</td><td class="num">${money(c.inc)}</td><td class="num">${money(c.out)}${c.ref?`<br><span class="muted">+${money(c.ref)} реф.</span>`:''}</td><td class="num"><b>${money(c.margin)}</b></td><td><div class="chips">${status(r,c)}</div></td></tr>`}).join('');
+    const refRows=RF.map(([,r])=>{const c=rcalc(r);if(!r.refPaid)unpaid+=c.ref;return `<tr><td>${fmtM(r.month)}</td><td>Реферальные ${c.refPct}% · ${esc(pname(r.personId))}<br><span class="muted">${esc(roomName(r.room))} · ${esc(r.nick||'')}</span></td><td class="num">${money(r.rake)}</td><td></td><td class="num">${money(c.ref)}</td><td></td><td>${r.refPaid?'<span class="pill ok">выплачено</span>':'<span class="pill warn">не выплачено</span>'}</td></tr>`}).join('');
+    h+=`<section class="sec"><h3>EQRB <span class="chips">${unpaid>0.004?`<span class="pill warn">К выплате ${money(unpaid)}</span>`:''}${debt?`<span class="pill bad">Партнёр должен ${money(debt)}</span>`:''}</span></h3>
+    <div class="g4"><div><span class="lbl">Рейк всего</span><b>${money(T.rk)}</b></div><div><span class="lbl">Твой доход</span><b>${money(T.inc)}</b></div><div><span class="lbl">Выплачено игрокам</span><b>${money(T.out)}</b></div><div><span class="lbl">Маржа</span><b>${money(T.mg)}</b></div></div>
+    ${acc.length?`<div class="tw"><table class="mini"><thead><tr><th>Рум · сделка</th><th>Партнёр</th><th>Ник</th><th class="num">Сделка</th><th class="num">Игроку</th></tr></thead><tbody>${acc.map(a=>{const rm=ST.rooms[a.room];const d=a.deal!==''&&a.deal!=null?a.deal:rm.deal,py=a.payout!==''&&a.payout!=null?a.payout:rm.payout;return `<tr><td>${esc(rm.name)}</td><td class="muted">${esc(rm.partner||'—')}</td><td><b>${esc(a.nick||'—')}</b></td><td class="num">${d??'—'}%</td><td class="num">${py??'—'}%</td></tr>`}).join('')}</tbody></table></div>`:'<p class="muted small" style="margin:0">Ников на сделках нет — добавь их выше.</p>'}
+    ${R.length||RF.length?`<b class="small">Рейк по месяцам</b><div class="tw"><table class="mini"><thead><tr><th>Месяц</th><th>Рум · ник</th><th class="num">Рейк</th><th class="num">Твой доход</th><th class="num">Игроку</th><th class="num">Маржа</th><th></th></tr></thead><tbody>${rows}${refRows}</tbody></table></div>`:'<p class="muted small" style="margin:0">Рейк вносится во вкладке EQRB раз в месяц по закрытому отчёту.</p>'}
+    ${(()=>{const others=Object.entries(ST.people).filter(([id])=>id!==editId).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));return `<div class="g2">${fl('Привёл игрока (получает %)',`<select id="f-ref-pid" data-f="ref.pid"><option value="">Никто</option>${others.map(([id,p])=>`<option value="${esc(id)}"${id===gp('ref.pid')?' selected':''}>${esc(p.name||'Без имени')}</option>`).join('')}</select>`)}${fl('% от всего рейка',fi('ref.pct',{type:'number',ph:'3'}))}${fl('С какого месяца',fi('ref.since',{type:'month'}))}</div>`})()}
+    </section>`}
+  h+=`</div><div class="sh-foot">`;
+  if(ui.closeAsk)h+=`<span class="note">Есть несохранённые изменения</span><button class="btn" data-act="discard">Не сохранять</button><button class="btn primary" data-act="save" data-close="1">Сохранить</button>`;
+  else h+=`${exists?`<button class="btn danger ${ui.confirm==='person'?'armed':''}" data-act="delPerson" style="margin-right:auto">${ui.confirm==='person'?'Точно удалить карточку?':'Удалить'}</button>`:'<span class="note">Новая карточка</span>'}<button class="btn" data-act="close">Закрыть</button><button class="btn primary" data-act="save" data-close="1">Сохранить</button>`;
+  h+=`</div>`;paint(document.getElementById('sheet'),h)}
+
+async function saveDraft(close){if(!(draft.name||'').trim()){toast('Укажи имя');document.getElementById('f-name')?.focus();return false}
+  draft.name=draft.name.trim();draft.accounts=(draft.accounts||[]).filter(a=>a.room||a.nick);draft.updatedAt=today();
+  if(draft.student?.plan)draft.student.plan=draft.student.plan.filter(x=>x.month||x.goal);
+  const ok=await put('people',editId,clone(draft));if(ok){dirty=false;if(close){closeModal(true);toast('Сохранено')}else renderModal()}return ok}
+
+async function addPay(){const P=ui.pay;if(!(+P.amount>0)){toast('Укажи сумму');return}if(!P.date){toast('Укажи дату');return}
+  draft.club=draft.club||{};const c=draft.club;const base=c.until&&c.until>=P.date?c.until:P.date;
+  c.until=addMonths(base,+P.months);if(!c.since)c.since=P.date;c.access='paid';if(!c.price)c.price=PRICE;if(!draft.tags.includes('club'))draft.tags.push('club');
+  if(!await saveDraft(false))return;
+  if(await put('payments',uid(),{personId:editId,date:P.date,amount:+P.amount,months:+P.months,method:P.method,txid:(P.txid||'').trim()})){toast('Оплата внесена. Доступ до '+fmtD(c.until));resetPay();renderModal()}}
+
+async function addRake(){const rf=ui.rf;if(!rf.pid||!rf.room||rf.rake===''){toast('Выбери игрока, рум и впиши рейк');return}
+  const p=ST.people[rf.pid],room=ST.rooms[rf.room];const acc=(p.accounts||[]).find(a=>a.room===rf.room);
+  const dup=Object.entries(ST.rake).find(([,r])=>r.personId===rf.pid&&r.room===rf.room&&r.month===ui.month);
+  if(dup){const sum=Math.round(((+dup[1].rake||0)+(+rf.rake))*100)/100;if(await upd('rake',dup[0],{rake:sum}))toast('Добавлено к записи за месяц: теперь '+money(sum))}
+  else if(await put('rake',uid(),{personId:rf.pid,month:ui.month,room:rf.room,nick:acc?.nick||'',rake:+rf.rake,deal:(acc&&acc.deal!==''&&acc.deal!=null)?+acc.deal:(+room.deal||0),payout:(acc&&acc.payout!==''&&acc.payout!=null)?+acc.payout:(+room.payout||0),paid:false,paidDate:'',createdAt:today()}))toast('Внесено');
+  ui.rf={pid:rf.pid,room:'',rake:''};render();document.getElementById('rf-room')?.focus()}
+
+function firstDealRoom(pid){const p=ST.people[pid];return (p?.accounts||[]).map(a=>a.room).find(r=>r&&ST.rooms[r]&&ST.rooms[r].active!==false)||''}
+
+/* ---------- events ---------- */
+function val(el){if(el.type==='checkbox')return el.checked;if(el.type==='number')return el.value===''?'':+el.value;return el.value}
+document.addEventListener('input',e=>{const el=e.target;
+  if(el.dataset.f){setPath(draft,el.dataset.f,val(el));dirty=true;if(ui.closeAsk){ui.closeAsk=false;renderModal();return}if(el.dataset.re==='m')renderModal();return}
+  if(el.dataset.tag){const t=el.dataset.tag;draft.tags=el.checked?[...new Set([...draft.tags,t])]:draft.tags.filter(x=>x!==t);
+    if(el.checked&&t==='lead'&&!draft.lead)draft.lead={stage:'new',interest:'club'};if(el.checked&&t==='club'&&!draft.club)draft.club={access:'none'};dirty=true;renderModal();return}
+  if(el.dataset.u){const v=el.type==='number'?el.value:val(el);setPath(ui,el.dataset.u,v);
+    if(el.dataset.u==='pay.months'){const pr=+(draft.club?.price||PRICE);ui.pay.amount=String(Math.round(pr*+v*(1-DISC[+v])))}
+    if(el.dataset.u==='rf.pid')ui.rf.room=firstDealRoom(v);
+    if(el.dataset.re==='v')render();if(el.dataset.re==='m')renderModal()}});
+document.addEventListener('change',async e=>{const el=e.target;
+  if(el.dataset.room){const k=el.dataset.k;let v=val(el);if((k==='deal'||k==='payout')&&v==='')v=0;await upd('rooms',el.dataset.room,{[k]:v});return}
+  if(el.dataset.rake){await upd('rake',el.dataset.rake,{rake:el.value===''?0:+el.value});return}
+  if(el.dataset.stage){e.stopPropagation();const st=el.value;await upd('people',el.dataset.stage,{lead:{stage:st}});return}});
+document.addEventListener('click',async e=>{const st=e.target.closest('[data-stage]');if(st)return;
+  const t=e.target.closest('[data-tab]');if(t){tab=t.dataset.tab;ui.confirm=null;render();window.scrollTo({top:0});return}
+  const tw=e.target.closest('[data-tw]');if(tw){ui.tw=tw.dataset.tw;render();return}
+  const r=e.target.closest('[data-role]');if(r){ui.role=r.dataset.role;render();return}
+  const a=e.target.closest('[data-act]');
+  if(!a){const o=e.target.closest('[data-open]');if(o&&ST.people[o.dataset.open])openPerson(o.dataset.open);return}
+  const act=a.dataset.act,id=a.dataset.id,i=+a.dataset.i;
+  const arm=async(key,fn)=>{if(ui.confirm===key){ui.confirm=null;await fn()}else ui.confirm=key;if(draft)renderModal();render()};
+  switch(act){
+    case 'new':newPerson();break;
+    case 'close':closeModal(false);break;
+    case 'discard':closeModal(true);break;
+    case 'save':await saveDraft(!!a.dataset.close);break;
+    case 'addAcc':(draft.accounts=draft.accounts||[]).push({room:'',nick:''});dirty=true;renderModal();break;
+    case 'delAcc':draft.accounts.splice(i,1);dirty=true;renderModal();break;
+    case 'addPlan':{draft.student=draft.student||{};const pl=draft.student.plan=draft.student.plan||[];const last=pl.length?pl[pl.length-1].month:'';pl.push({month:last?addMonths(last+'-01',1).slice(0,7):curMonth(),goal:'',done:false});dirty=true;renderModal();break}
+    case 'delPlan':draft.student.plan.splice(i,1);dirty=true;renderModal();break;
+    case 'addNote':{const tx=(ui.note||'').trim();if(!tx){toast('Напиши текст заметки');break}draft.student=draft.student||{};(draft.student.notes=draft.student.notes||[]).unshift({date:today(),text:tx});ui.note='';dirty=true;renderModal();break}
+    case 'delNote':draft.student.notes.splice(i,1);dirty=true;renderModal();break;
+    case 'addPay':await addPay();break;
+    case 'delPay':await arm('pay'+id,async()=>{if(await del('payments',id))toast('Оплата удалена. Дату окончания доступа поправь вручную, если нужно.')});break;
+    case 'delPerson':await arm('person',async()=>{if(await del('people',editId)){closeModal(true);toast('Карточка удалена')}});break;
+    case 'addRake':await addRake();break;
+    case 'delRake':await arm('rk'+id,async()=>{await del('rake',id)});break;
+    case 'payGroup':{const rows=Object.entries(ST.rake).filter(([,r])=>r.personId===id&&r.month===ui.month);const rr=Object.entries(ST.rake).filter(([,r])=>r.month===ui.month&&rcalc(r).refPid===id);const all=rows.every(([,r])=>r.paid)&&rr.every(([,r])=>r.refPaid);
+      for(const [rid] of rows)await upd('rake',rid,all?{paid:false,paidDate:''}:{paid:true,paidDate:today()});
+      for(const [rid] of rr)await upd('rake',rid,all?{refPaid:false,refPaidDate:''}:{refPaid:true,refPaidDate:today()});if(!all)toast('Отмечено как выплачено');break}
+    case 'addTask':{const tf=ui.tf;if(!(tf.title||'').trim()){toast('Напиши, что нужно сделать');break}if(await put('tasks',uid(),{title:tf.title.trim(),due:tf.due||'',personId:tf.pid||'',who:tf.who||'me',done:false,createdAt:today()})){ui.tf={title:'',due:'',pid:'',who:tf.who||'me'};render();toast('Задача добавлена')}break}
+    case 'toggleTask':{const x=ST.tasks[id];if(x)await upd('tasks',id,{done:!x.done,doneDate:!x.done?today():''});break}
+    case 'whoTask':{const x=ST.tasks[id];if(x){const w=(x.who||'me')==='helper'?'me':'helper';if(await upd('tasks',id,{who:w}))toast(w==='helper'?'Задача передана помощнику':'Задача теперь твоя')}break}
+    case 'delTask':await arm('task'+id,async()=>{await del('tasks',id)});break;
+    case 'showDone':ui.showDone=!ui.showDone;render();break;
+    case 'payPerson':{const own=Object.entries(ST.rake).filter(([,r])=>r.personId===id&&!r.paid&&rcalc(r).out>0.004);const refs=Object.entries(ST.rake).filter(([,r])=>rcalc(r).refPid===id&&!r.refPaid);for(const [rid] of own)await upd('rake',rid,{paid:true,paidDate:today()});for(const [rid] of refs)await upd('rake',rid,{refPaid:true,refPaidDate:today()});toast('Отмечено: '+pname(id)+' — выплачено');break}
+    case 'addExp':{const ef=ui.ef;if(!(+ef.amount>0)){toast('Укажи сумму');break}if(await put('expenses',uid(),{date:ef.date||today(),amount:+ef.amount,cat:(ef.cat||'Другое').trim(),biz:ef.biz,payeeName:(ef.payee||'').trim(),forp:ef.forp||'',note:(ef.note||'').trim(),rec:!!ef.rec,createdAt:today()})){ui.ef={...ef,amount:'',note:'',forp:'',rec:false};render();toast('Расход добавлен')}break}
+    case 'payRec':{const e=ST.expenses[id];if(!e)break;const {createdAt,...rest}=e;if(await put('expenses',uid(),{...rest,date:today(),createdAt:today()})){await upd('expenses',id,{rec:false,recStopped:true});toast('Платёж записан в расходы')}break}
+    case 'stopRec':{if(await upd('expenses',id,{rec:false}))toast('Больше не напоминаю об этом платеже');break}
+    case 'delExp':await arm('exp'+id,async()=>{await del('expenses',id)});break;
+    case 'partnerToggle':{const r=ST.rake[id];if(r)await upd('rake',id,{partnerUnpaid:!r.partnerUnpaid});break}
+    case 'addRoom':{const rid=uid();await put('rooms',rid,{name:'Новый рум',deal:0,payout:0,basis:'netrev',active:true});setTimeout(()=>document.getElementById('rn-'+rid)?.select(),300);break}
+    case 'delRoom':{if(Object.values(ST.rake).some(r=>r.room===id)){toast('По этому руму есть записи рейка — лучше снять галочку «Активен»');break}await arm('room'+id,async()=>{await del('rooms',id)});break}
+  }});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.getElementById('modal').hidden)closeModal(false)});
+
+/* ---------- boot ---------- */
+/* Хранилище на сервере (Railway). Тот же интерфейс, что был у базы артефакта. */
+function makeDb(){const subs={};let rev=-1,pulling=null;
+  const fail=async r=>{if(r.status===401){location.href='/login';return}let m='';try{m=(await r.json()).error}catch(_){}const e=new Error(m||('HTTP '+r.status));e.code=r.status===403?'invalid_argument':'http';throw e};
+  async function pull(){if(pulling)return pulling;pulling=(async()=>{try{const r=await fetch('/api/data',{credentials:'same-origin',cache:'no-store'});if(!r.ok)return fail(r);const j=await r.json();rev=j.rev;
+    for(const c in subs){const docs=Object.entries(j.data[c]||{}).map(([id,d])=>({id,data:()=>d}));subs[c].forEach(([fn])=>fn({docs}))}}
+    catch(e){for(const c in subs)subs[c].forEach(([,err])=>err&&err(e))}finally{pulling=null}})();return pulling}
+  async function poll(){try{if(!document.hidden){const r=await fetch('/api/rev',{credentials:'same-origin',cache:'no-store'});if(r.status===401){location.href='/login';return}if(r.ok){const j=await r.json();if(j.rev!==rev)await pull()}}}catch(_){}setTimeout(poll,4000)}
+  async function write(op,col,id,data){const r=await fetch('/api/doc',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({op,col,id,data})});if(!r.ok)return fail(r);await pull()}
+  let started=false;const start=()=>{if(started)return;started=true;setTimeout(async()=>{await pull();setTimeout(poll,4000)},0)};
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull()});
+  return {collection(c){return {onSnapshot(fn,err){(subs[c]=subs[c]||[]).push([fn,err]);start()},doc(id){return {set:d=>write('set',c,id,d),update:d=>write('update',c,id,d),delete:()=>write('delete',c,id)}}}}}}
+if(window.CRM_USER==='helper')ui.tw='helper';
+render();
+(()=>{db=makeDb();
+  for(const c of ['people','payments','rake','rooms','tasks','expenses'])db.collection(c).onSnapshot(s=>{const o={};s.docs.forEach(d=>o[d.id]=d.data());ST[c]=o;loaded.add(c);render();
+      if(draft&&(c==='payments'||c==='rake'||c==='rooms'))renderModal()},
+    err=>{const b=document.getElementById('banner');b.hidden=false;b.textContent=errText(err)})})();
+</script>
+
+</body></html>

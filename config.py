@@ -30,3 +30,10 @@ DAY_START_HOUR = int(os.getenv("DAY_START_HOUR", "6"))
 AGENT_MODEL = os.getenv("AGENT_MODEL", "claude-sonnet-5-5")
 TRAVELPAYOUTS_TOKEN = os.getenv("TRAVELPAYOUTS_TOKEN", "")
 GMAIL_USER = os.getenv("GMAIL_USER", "")  # ящик Workspace, напр. poker@eqlbm.club
+
+# CRM (веб-страница + данные для бота)
+# Логины и пароли: "leo:пароль1,helper:пароль2". Без этой переменной веб-страница CRM не запускается.
+CRM_USERS = dict(x.split(":", 1) for x in os.getenv("CRM_USERS", "").split(",") if ":" in x)
+CRM_USERS = {k.strip().lower(): v.strip() for k, v in CRM_USERS.items()}
+CRM_SECRET = os.getenv("CRM_SECRET", "")
+PORT = int(os.getenv("PORT", "8080"))

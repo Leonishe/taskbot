@@ -24,6 +24,14 @@ create table if not exists jobs (
     instruction text not null,
     done        boolean not null default false
 );
+create table if not exists dialog (
+    id        serial primary key,
+    ts        timestamptz not null default now(),
+    user_text text not null,
+    result    text not null,
+    ok        boolean not null default true,
+    instruction text
+);
 create table if not exists settings (
     key   text primary key,
     value text not null
@@ -103,3 +111,14 @@ class DB:
     async def take_due_jobs(self, now: datetime) -> list[asyncpg.Record]:
         return await self.pool.fetch(
             "update jobs set done=true where not done and run_at <= $1 returning *", now)
+
+    # ---- история диалога (контекст для «попробуй ещё», «а из Москвы?») ----
+    async def add_dialog(self, user_text: str, result: str, ok: bool = True, instruction: str | None = None):
+        await self.pool.execute("insert into dialog(user_text, result, ok, instruction) values($1,$2,$3,$4)",
+                                user_text, result, ok, instruction)
+        await self.pool.execute("delete from dialog where ts < now() - interval '30 days'")
+
+    async def recent_dialog(self, since: datetime, limit: int = 8) -> list[asyncpg.Record]:
+        rows = await self.pool.fetch(
+            "select * from dialog where ts >= $1 order by id desc limit $2", since, limit)
+        return list(reversed(rows))

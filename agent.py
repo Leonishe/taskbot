@@ -11,7 +11,19 @@ from core import parse_date, parse_hhmm
 log = logging.getLogger("agent")
 
 
-def _sys(now: datetime, areas: list[str], has_mail: bool, has_flights: bool, has_cal: bool) -> str:
+CRM_RULES = """
+CRM (EQLBM.club + партнёрка EQRAKEBACK/EQRB) — у тебя есть инструменты crm_*:
+- Люди (people): одна карточка на человека, разделы-теги: lead (лид, этапы new/talk/think/won_club/won_eqrb/lost, следующий шаг next + nextDate), club (подписка: access none/paid/eqrb/og, since, until, price; тариф $349/мес), student (ученик: лимит abi, план, заметки), eqrb (игрок по рейкбек-сделке; ники по румам в accounts: room, nick, deal, payout).
+- Румы (rooms) — сделки: deal% — что получает Лео от партнёра, payout% — что отдаёт игроку. Рейк (rake) — записи «игрок × рум × месяц» в долларах; доход = рейк×deal%, игроку = рейк×payout%, рефереру — его %, маржа — остаток. paid — выплачено игроку, partnerUnpaid — партнёр ещё не заплатил.
+- Задачи CRM (tasks): who = me (Лео) или helper (помощник).
+- Сначала найди нужных людей/румы (crm_find_people, crm_list rooms) и бери их id из результатов; никогда не выдумывай id.
+- Месяц рейка, если не назван, — прошлый месяц. Если неясно, какой игрок или рум (у игрока несколько сделок), спроси, а не угадывай.
+- Деньги показывай в $ с двумя знаками. После записи коротко подтверди, что именно внесено и что посчиталось.
+- Удалять записи ты не можешь — для этого Лео откроет CRM.
+"""
+
+
+def _sys(now: datetime, areas: list[str], has_mail: bool, has_flights: bool, has_cal: bool, has_crm: bool = False) -> str:
     return f"""Ты — личный ассистент Лео в его Telegram-боте. Лео — профессиональный покерист и предприниматель (клуб EQLBM), живёт в Беларуси, часовой пояс Минска. Сейчас {now:%Y-%m-%d %H:%M}, {WEEKDAYS[now.weekday()]}.
 
 Ты выполняешь поручения: ищешь информацию, билеты, отели, сравниваешь варианты, готовишь тексты, работаешь с его задачами и календарём{', читаешь его почту' if has_mail else ''}. Доводи дело до результата сам, используя инструменты, а не советуй «поищите на сайте».
@@ -39,7 +51,8 @@ def _sys(now: datetime, areas: list[str], has_mail: bool, has_flights: bool, has
 - Если без уточнения результат будет бесполезным (например, неизвестно даже примерно, когда лететь), задай один короткий вопрос. Иначе делай разумные допущения и коротко их называй.
 - В конце, если уместно, предложи следующий шаг: поставить задачу или напоминание (add_task), проверить что-то позже (schedule_check), внести в календарь.
 - Отвечай по-русски, коротко и по делу, без воды. Формат — Telegram HTML: только <b>, <i>, <a href="...">, переносы строк. Никакого Markdown (**, ##, списков с *). Списки — строками с «•».
-- Сферы задач Лео: {', '.join(areas)}."""
+- Сферы задач Лео: {', '.join(areas)}.
+{CRM_RULES if has_crm else ''}"""
 
 
 class Agent:
@@ -50,13 +63,12 @@ class Agent:
         self.flights = flights
         self.gmail = gmail
         self.max_steps = max_steps
-        self.convo: list[tuple[datetime, str, str]] = []  # (время, поручение, ответ)
 
     # ---------- инструменты ----------
     def tools(self) -> list[dict]:
         t = [
             {"type": "web_search_20250305", "name": "web_search", "max_uses": 12,
-             "user_location": {"type": "approximate", "city": "Minsk", "country": "BY", "timezone": "Europe/Minsk"}},
+             "user_location": {"type": "approximate", "city": "Minsk", "timezone": "Europe/Minsk"}},
             {"type": "web_fetch_20250910", "name": "web_fetch", "max_uses": 15, "max_content_tokens": 10000},
             {"name": "add_task", "description": "Поставить Лео задачу/напоминание в его списке задач.",
              "input_schema": {"type": "object", "properties": {
@@ -99,6 +111,35 @@ class Agent:
                      "min_days": {"type": "integer", "description": "мин. длительность поездки, дней (для туда-обратно)"},
                      "max_days": {"type": "integer"}, "direct": {"type": "boolean"}},
                      "required": ["origin", "destination", "month"]}},
+            ]
+        if self.core.crm:
+            obj = lambda props, req=(): {"type": "object", "properties": props, "required": list(req)}
+            S, I, N, A = {"type": "string"}, {"type": "integer"}, {"type": "number"}, {"type": "array", "items": {"type": "string"}}
+            t += [
+                {"name": "crm_find_people", "description": "Поиск людей в CRM по имени, нику, Telegram, Discord. Пустой запрос — все.",
+                 "input_schema": obj({"query": S})},
+                {"name": "crm_person", "description": "Полная карточка человека: контакты, ники, подписка, оплаты, рейк по месяцам, задачи.",
+                 "input_schema": obj({"person_id": S}, ["person_id"])},
+                {"name": "crm_rake_report", "description": "Отчёт по рейку: итоги, по игрокам, строки. Фильтр по месяцам (YYYY-MM) и/или игроку.",
+                 "input_schema": obj({"months": A, "person_id": S})},
+                {"name": "crm_attention", "description": "Что требует внимания: подписки к продлению, рейкбек к выплате, долги партнёров, лиды и задачи на сегодня, дни рождения.",
+                 "input_schema": obj({})},
+                {"name": "crm_list", "description": "Сырые записи коллекции с id: rooms, payments, tasks, expenses.",
+                 "input_schema": obj({"collection": {"type": "string", "enum": ["rooms", "payments", "tasks", "expenses"]}}, ["collection"])},
+                {"name": "crm_add_person", "description": "Новая карточка (по умолчанию лид).",
+                 "input_schema": obj({"name": S, "tags": A, "tg": S, "discord": S, "phone": S, "source": S, "note": S,
+                                      "stage": S, "interest": {"type": "string", "enum": ["club", "eqrb", "both"]},
+                                      "next": S, "next_date": S}, ["name"])},
+                {"name": "crm_update", "description": "Изменить поля документа (вложенные объекты сливаются, массивы заменяются целиком). "
+                 "Напр. people: {\"lead\": {\"stage\": \"talk\", \"next\": \"...\", \"nextDate\": \"2026-10-20\"}}; tasks: {\"done\": true}; rake: {\"partnerUnpaid\": false}.",
+                 "input_schema": obj({"collection": {"type": "string", "enum": ["people", "tasks", "rooms", "rake", "expenses"]},
+                                      "doc_id": S, "changes": {"type": "object"}}, ["collection", "doc_id", "changes"])},
+                {"name": "crm_add_rake", "description": "Внести рейк игрока за месяц по руму (как кнопка «Внести» в CRM; если запись за месяц уже есть — прибавит).",
+                 "input_schema": obj({"person_id": S, "room_id": S, "month": S, "rake": N, "note": S}, ["person_id", "room_id", "month", "rake"])},
+                {"name": "crm_mark_rakeback_paid", "description": "Отметить весь невыплаченный рейкбек человека (и его реферальные) как выплаченный сегодня.",
+                 "input_schema": obj({"person_id": S}, ["person_id"])},
+                {"name": "crm_add_task", "description": "Задача в CRM (для себя или помощника), можно привязать к человеку.",
+                 "input_schema": obj({"title": S, "due": S, "who": {"type": "string", "enum": ["me", "helper"]}, "person_id": S}, ["title"])},
             ]
         if self.gmail:
             t += [
@@ -144,24 +185,53 @@ class Agent:
         if name == "cheapest_days":
             return await self.flights.cheapest_days(a["origin"], a["destination"], a["month"],
                                                     a.get("min_days"), a.get("max_days"), a.get("direct", False))
+        if name.startswith("crm_"):
+            return await self.run_crm(name, a)
         if name == "search_mail":
             return await self.gmail.search(a["query"], a.get("max_results") or 10)
         if name == "read_mail":
             return await self.gmail.read(a["id"])
         return {"error": f"неизвестный инструмент {name}"}
 
+    async def run_crm(self, name: str, a: dict):
+        crm = self.core.crm
+        if name in ("crm_add_rake", "crm_mark_rakeback_paid", "crm_add_person", "crm_add_task", "crm_update"):
+            by = "bot"
+            if name == "crm_add_rake":
+                return await crm.add_rake(a["person_id"], a["room_id"], a["month"], float(a["rake"]), a.get("note") or "", by)
+            if name == "crm_mark_rakeback_paid":
+                return await crm.mark_paid(a["person_id"], by)
+            if name == "crm_add_person":
+                return await crm.add_person(a, by)
+            if name == "crm_add_task":
+                return await crm.add_task(a["title"], a.get("due") or "", a.get("who") or "me", a.get("person_id") or "", by)
+            ok = await crm.write("update", a["collection"], a["doc_id"], a.get("changes") or {}, by)
+            return {"ok": ok} if ok else {"error": "документ не найден"}
+        S = await crm.all()
+        if name == "crm_find_people":
+            return crm.find_people(S, a.get("query") or "")
+        if name == "crm_person":
+            return crm.person_card(S, a["person_id"]) or {"error": "нет такого человека"}
+        if name == "crm_rake_report":
+            return crm.rake_report(S, a.get("months") or None, a.get("person_id") or None)
+        if name == "crm_attention":
+            return crm.attention(S)
+        if name == "crm_list":
+            return [{"id": k, **v} for k, v in S[a["collection"]].items()][:200]
+        return {"error": "неизвестный инструмент"}
+
     # ---------- цикл ----------
-    async def run(self, instruction: str, scheduled: bool = False) -> str:
+    async def run(self, instruction: str, scheduled: bool = False, history: list[tuple[str, str]] | None = None) -> str:
         now = self.core.now()
-        self.convo = [x for x in self.convo if now - x[0] < timedelta(minutes=60)][-4:]
         messages = []
         if not scheduled:
-            for _, q, ans in self.convo:
-                messages += [{"role": "user", "content": q}, {"role": "assistant", "content": ans}]
+            for q, ans in history or []:
+                messages += [{"role": "user", "content": q}, {"role": "assistant", "content": ans or "—"}]
         prompt = instruction if not scheduled else (
             f"Это запланированная проверка, которую ты сам поставил раньше. Выполни и коротко сообщи итог: {instruction}")
         messages.append({"role": "user", "content": prompt})
-        system = _sys(now, await self.core.areas(), bool(self.gmail), bool(self.flights), bool(self.core.cal))
+        system = _sys(now, await self.core.areas(), bool(self.gmail), bool(self.flights), bool(self.core.cal),
+                      bool(self.core.crm))
         tools = self.tools()
         texts: list[str] = []
         for _ in range(self.max_steps):
@@ -191,6 +261,4 @@ class Agent:
         else:
             texts.append("\n\n<i>Остановился: слишком много шагов. Уточни поручение.</i>")
         answer = "".join(texts).strip() or "Не получилось выполнить поручение, попробуй переформулировать."
-        if not scheduled:
-            self.convo.append((now, instruction, answer))
         return answer

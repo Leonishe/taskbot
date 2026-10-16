@@ -1,7 +1,6 @@
 """Вся логика бота без привязки к Telegram: на выходе — список (текст, клавиатура)."""
 import html
 import re
-from collections import deque
 from datetime import date, datetime, time, timedelta
 
 from aiogram.types import InlineKeyboardButton as B, InlineKeyboardMarkup as KB
@@ -33,9 +32,10 @@ class Core:
     def __init__(self, db, tz, default_areas, default_morning, default_evening, parser=None, cal=None):
         self.db, self.tz, self.parser, self.cal = db, tz, parser, cal
         self.agent = None  # подключается в bot.py
+        self.crm = None    # подключается в bot.py
         self.default_areas = default_areas
         self.default_morning, self.default_evening = default_morning, default_evening
-        self.history: deque = deque(maxlen=6)  # (время, строка контекста)
+        self.agent_history: list[tuple[str, str]] = []
 
     def now(self) -> datetime:
         return datetime.now(self.tz)
@@ -247,11 +247,20 @@ class Core:
                 text = (f"Поправка к задаче #{t['id']} «{t['title']}» "
                         f"(сфера: {t['area'] or '-'}, срок: {self.when(t) or 'без срока'}). "
                         f"Используй edit с task_id={t['id']}. Поправка: {text}")
-        recent = [line for ts, line in self.history if now - ts < timedelta(minutes=20)]
-        res = await self.parser.parse(text, now, await self.areas(), tasks, recent)
-        out = await self.apply(res, notify)
-        done = "; ".join(html.unescape(re.sub(r"<[^>]+>", "", t)).replace("\n", " ") for t, _ in out)[:400]
-        self.history.append((now, f"[{now:%H:%M}] «{text}» → {done}"))
+        rows = await self.db.recent_dialog(now - timedelta(hours=3), 8)
+        recent = [f"[{r['ts'].astimezone(self.tz):%H:%M}] «{r['user_text'][:600]}» → {r['result'][:500]}" for r in rows]
+        # прошлые успешные поручения — как контекст для агента
+        self.agent_history = [(r["instruction"], r["result"]) for r in rows if r["ok"] and r["instruction"]][-4:]
+        self.last_instruction = None
+        try:
+            res = await self.parser.parse(text, now, await self.areas(), tasks, recent)
+            out = await self.apply(res, notify)
+        except Exception as ex:
+            await self.db.add_dialog(text, f"ОШИБКА — не выполнено ({type(ex).__name__})", False,
+                                     getattr(self, "last_instruction", None))
+            raise
+        done = "\n".join(html.unescape(re.sub(r"<[^>]+>", "", t)) for t, _ in out)[:3000]
+        await self.db.add_dialog(text, done, True, getattr(self, "last_instruction", None))
         return out
 
     async def apply(self, res: dict, notify=None) -> Out:
@@ -274,9 +283,10 @@ class Core:
                 if not self.agent:
                     out.append(("Режим поручений не подключён.", None))
                     continue
+                self.last_instruction = a["instruction"]
                 if notify:
                     await notify("🔎 Принял, работаю…")
-                out.append((await self.agent.run(a["instruction"]), "agent"))
+                out.append((await self.agent.run(a["instruction"], history=self.agent_history), "agent"))
             elif typ == "list":
                 out.append((await self.list_text(a.get("period") or "all", a.get("area")), None))
         if not out:
@@ -345,6 +355,13 @@ class Core:
             blocks.append("На сегодня задач со сроком нет.")
         if nodate:
             blocks.append(f"📥 Без срока: {len(nodate)} — /list")
+        if self.crm:
+            try:
+                crm_lines = await self.crm.morning_lines()
+            except Exception:
+                crm_lines = ["<i>CRM сейчас недоступна</i>"]
+            if crm_lines:
+                blocks.append("📋 <b>CRM</b>\n" + "\n".join(e(x) if not x.startswith("<i>") else x for x in crm_lines))
         return [("\n\n".join(blocks), None)]
 
     async def evening(self) -> Out:

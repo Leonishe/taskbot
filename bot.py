@@ -6,7 +6,9 @@ from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import BotCommand, CallbackQuery, Message
+from aiogram.types import BotCommand, BufferedInputFile, CallbackQuery, Message
+import hashlib
+import json
 
 import config as C
 from ai import Parser, transcribe
@@ -132,7 +134,36 @@ async def settings(m: Message):
         f"Утренняя сводка: {await core.morning_time():%H:%M} — /morning ЧЧ:ММ\n"
         f"Вечерний разбор: {await core.evening_time():%H:%M} — /evening ЧЧ:ММ\n"
         f"Сферы: {e(', '.join(await core.areas()))} — /areas\n"
-        f"Календарь: {cal}\nГолосовые: {voice}\nБилеты: {fl}\nПочта: {mail}")
+        f"Календарь: {cal}\nГолосовые: {voice}\nБилеты: {fl}\nПочта: {mail}\n"
+        f"CRM: {'веб-страница работает' if C.CRM_USERS else 'данные есть, веб-страница выключена (нет CRM_USERS)'}")
+
+
+# ---------- CRM: перенос и резервная копия ----------
+@owner.message(Command("crm_export"))
+async def crm_export(m: Message):
+    data = await core.crm.all()
+    raw = json.dumps(data, ensure_ascii=False, indent=1).encode()
+    n = sum(len(v) for v in data.values())
+    await m.answer_document(BufferedInputFile(raw, f"crm-{core.now():%Y-%m-%d}.json"),
+                            caption=f"Резервная копия CRM: {n} записей")
+
+
+@owner.message(F.document & F.caption.startswith("/crm_import"))
+async def crm_import(m: Message):
+    force = "force" in (m.caption or "")
+    if not force and not await core.crm.is_empty():
+        await m.answer("В CRM уже есть данные. Чтобы заменить их файлом целиком, отправь файл с подписью <code>/crm_import force</code>. "
+                       "Сначала лучше сделать копию: /crm_export")
+        return
+    buf = await m.bot.download(m.document.file_id)
+    try:
+        dump = json.loads(buf.read().decode("utf-8"))
+        n = await core.crm.import_dump(dump)
+    except Exception as ex:
+        log.exception("import failed")
+        await m.answer(f"Не получилось загрузить файл: {e(str(ex)[:200])}")
+        return
+    await m.answer(f"✅ CRM загружена: {n} записей.")
 
 
 async def _set_time(m: Message, cmd: CommandObject, key: str, label: str):
@@ -184,6 +215,9 @@ async def area_del(m: Message, command: CommandObject):
 # ---------- свободный текст и голос ----------
 async def process(m: Message, text: str):
     edit_id = pending_edit.pop(m.from_user.id, None)
+    q = m.reply_to_message
+    if q and (q.text or q.caption):
+        text = f"[В ответ на сообщение: «{(q.text or q.caption)[:800]}»]\n{text}"
     await m.bot.send_chat_action(m.chat.id, "typing")
     holder = {}
 
@@ -192,9 +226,16 @@ async def process(m: Message, text: str):
 
     try:
         out = await core.handle_text(text, edit_task_id=edit_id, notify=notify)
-    except Exception:
+    except Exception as ex:
         log.exception("parse failed")
-        await m.answer("Не получилось — сервис ИИ не ответил или упал поиск. Попробуй ещё раз через минуту.")
+        if holder.get("msg"):
+            try:
+                await holder["msg"].delete()
+            except Exception:
+                pass
+        reason = f"{type(ex).__name__}: {str(ex)[:300]}"
+        await m.answer("Не получилось выполнить. Напиши «попробуй ещё» — я помню, о чём шла речь.\n\n"
+                       f"<i>Причина: {e(reason)}</i>")
         return
     if holder.get("msg"):
         try:
@@ -301,7 +342,14 @@ async def main():
         gmail = Gmail(C.GOOGLE_SERVICE_ACCOUNT_JSON, C.GMAIL_USER)
         log.info("gmail enabled")
     from agent import Agent
+    from crm import CRM
+    core.crm = CRM(db, C.TZ)
+    await core.crm.init()
     core.agent = Agent(C.ANTHROPIC_API_KEY, C.AGENT_MODEL, core, flights=flights, gmail=gmail)
+    if C.CRM_USERS:
+        import crm_web
+        secret = C.CRM_SECRET or hashlib.sha256(("crm:" + C.BOT_TOKEN).encode()).hexdigest()
+        await crm_web.start(core.crm, C.CRM_USERS, secret, C.PORT)
 
     bot = Bot(C.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     await bot.set_my_commands([
