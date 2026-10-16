@@ -44,7 +44,8 @@ class Calendar:
                 d, t = dt.date(), dt.strftime("%H:%M")
             else:
                 d, t = date.fromisoformat(st.get("date")), None  # событие на весь день
-            out.append({"date": d, "time": t, "title": e.get("summary") or "(без названия)"})
+            out.append({"id": e.get("id"), "date": d, "time": t, "title": e.get("summary") or "(без названия)",
+                        "start": st.get("dateTime")})
         return out
 
     def _body(self, title: str, start: datetime) -> dict:
@@ -65,6 +66,20 @@ class Calendar:
     def _update(self, event_id, title, start):
         r = self.s.patch(f"{BASE}/calendars/{self.cal}/events/{quote(event_id)}",
                          json=self._body(title, start), timeout=20)
+        r.raise_for_status()
+
+    def _move_own(self, event_id, start):
+        """Сдвинуть чужое (твоё) событие: меняем только время, длительность сохраняем."""
+        url = f"{BASE}/calendars/{self.cal}/events/{quote(event_id)}"
+        r = self.s.get(url, timeout=20)
+        r.raise_for_status()
+        ev = r.json()
+        try:
+            dur = datetime.fromisoformat(ev["end"]["dateTime"]) - datetime.fromisoformat(ev["start"]["dateTime"])
+        except Exception:
+            dur = timedelta(minutes=self.minutes)
+        r = self.s.patch(url, json={"start": {"dateTime": start.isoformat()},
+                                    "end": {"dateTime": (start + dur).isoformat()}}, timeout=20)
         r.raise_for_status()
 
     def _delete(self, event_id):
@@ -101,6 +116,36 @@ class Calendar:
             return True
         except Exception:
             log.exception("calendar update failed")
+            return False
+
+    async def find_existing(self, title: str, start: datetime) -> str | None:
+        """Твоё событие в это же время (±10 мин) — чтобы не создавать дубль."""
+        evs = await self.events_on(start.date())
+        if not evs:
+            return None
+        words = {w for w in title.lower().replace(",", " ").split() if len(w) >= 3}
+        same_time = []
+        for ev in evs:
+            if not ev.get("start"):
+                continue
+            try:
+                diff = abs((datetime.fromisoformat(ev["start"]) - start).total_seconds())
+            except Exception:
+                continue
+            if diff <= 600:
+                same_time.append(ev)
+        for ev in same_time:  # сначала совпадение по словам
+            ev_words = {w for w in ev["title"].lower().replace(",", " ").split() if len(w) >= 3}
+            if any(a[:4] == b[:4] for a in words for b in ev_words):
+                return ev["id"]
+        return same_time[0]["id"] if len(same_time) == 1 else None
+
+    async def move_own(self, event_id: str, start: datetime) -> bool:
+        try:
+            await asyncio.to_thread(self._move_own, event_id, start)
+            return True
+        except Exception:
+            log.exception("calendar move failed")
             return False
 
     async def delete(self, event_id: str):

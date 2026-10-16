@@ -130,18 +130,25 @@ class Core:
         if not self.cal:
             return t
         has_time = t["status"] == "open" and t["remind_at"] is not None
-        ev = t["gcal_event_id"]
+        ev, linked = t["gcal_event_id"], t["gcal_linked"]
         if has_time:
             start = t["remind_at"].astimezone(self.tz)
-            if ev:
+            if ev and linked:
+                await self.cal.move_own(ev, start)  # твоё событие: двигаем время, название не трогаем
+            elif ev:
                 await self.cal.update(ev, t["title"], start)
             else:
-                ev = await self.cal.create(t["title"], start)
-                if ev:
-                    t = await self.db.update_task(t["id"], gcal_event_id=ev)
+                own = await self.cal.find_existing(t["title"], start)
+                if own:
+                    t = await self.db.update_task(t["id"], gcal_event_id=own, gcal_linked=True)
+                else:
+                    ev = await self.cal.create(t["title"], start)
+                    if ev:
+                        t = await self.db.update_task(t["id"], gcal_event_id=ev)
         elif ev and t["status"] == "open":
-            await self.cal.delete(ev)
-            t = await self.db.update_task(t["id"], gcal_event_id=None)
+            if not linked:
+                await self.cal.delete(ev)
+            t = await self.db.update_task(t["id"], gcal_event_id=None, gcal_linked=False)
         return t
 
     # ---------- операции с задачами ----------
@@ -153,7 +160,9 @@ class Core:
     async def add(self, title, area, due: date | None, tm: time | None):
         if tm and not due:
             due = self.now().date()
-        t = await self.db.add_task(title.strip(), area, due, self._remind_at(due, tm))
+        at = self._remind_at(due, tm)
+        # время уже прошло (вносишь задним числом) — не напоминать
+        t = await self.db.add_task(title.strip(), area, due, at, reminded=bool(at and at <= self.now()))
         return await self.sync_event(t)
 
     async def complete(self, tid: int) -> str:
@@ -169,8 +178,8 @@ class Core:
         t = await self.db.get_task(tid)
         if not t:
             return "Такой задачи нет."
-        if self.cal and t["gcal_event_id"]:
-            await self.cal.delete(t["gcal_event_id"])
+        if self.cal and t["gcal_event_id"] and not t["gcal_linked"]:
+            await self.cal.delete(t["gcal_event_id"])  # твои события в календаре бот не удаляет
         await self.db.delete_task(tid)
         return f"🗑 Удалил: <s>{e(t['title'])}</s>"
 
@@ -232,7 +241,8 @@ class Core:
         f["due_date"] = due
         new_at = self._remind_at(due, tm)
         if new_at != t["remind_at"]:
-            f["remind_at"], f["reminded"], f["snooze_at"] = new_at, False, None
+            f["remind_at"], f["snooze_at"] = new_at, None
+            f["reminded"] = bool(new_at and new_at <= self.now())  # перенос в прошлое — без напоминания
         t = await self.db.update_task(tid, **f)
         t = await self.sync_event(t)
         return [("✏️ Обновил\n" + self.card(t), self.kb_new(t["id"]))]
@@ -329,6 +339,8 @@ class Core:
         evs = await self.cal.events_on(day)
         if evs is None:
             return f"{title}\n<i>календарь сейчас недоступен</i>"
+        linked = {t["gcal_event_id"] for t in await self.db.open_tasks() if t["gcal_linked"]}
+        evs = [ev for ev in evs if ev.get("id") not in linked]  # они уже показаны как задачи
         if not evs:
             return ""
         return title + "\n" + "\n".join(

@@ -17,6 +17,7 @@ create table if not exists tasks (
     created_at    timestamptz not null default now(),
     done_at       timestamptz
 );
+alter table tasks add column if not exists gcal_linked boolean not null default false;
 create index if not exists tasks_open_idx on tasks (status, due_date);
 create table if not exists jobs (
     id          serial primary key,
@@ -38,7 +39,7 @@ create table if not exists settings (
 );
 """
 
-FIELDS = {"title", "area", "due_date", "remind_at", "reminded", "snooze_at", "status", "gcal_event_id", "done_at"}
+FIELDS = {"title", "area", "due_date", "remind_at", "reminded", "snooze_at", "status", "gcal_event_id", "gcal_linked", "done_at"}
 
 
 class DB:
@@ -74,10 +75,10 @@ class DB:
 
     # ---- tasks ----
     async def add_task(self, title: str, area: str | None, due_date: date | None,
-                       remind_at: datetime | None) -> asyncpg.Record:
+                       remind_at: datetime | None, reminded: bool = False) -> asyncpg.Record:
         return await self.pool.fetchrow(
-            "insert into tasks(title, area, due_date, remind_at) values($1,$2,$3,$4) returning *",
-            title, area, due_date, remind_at)
+            "insert into tasks(title, area, due_date, remind_at, reminded) values($1,$2,$3,$4,$5) returning *",
+            title, area, due_date, remind_at, reminded)
 
     async def get_task(self, task_id: int) -> asyncpg.Record | None:
         return await self.pool.fetchrow("select * from tasks where id=$1", task_id)
