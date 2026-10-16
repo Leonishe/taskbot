@@ -37,6 +37,12 @@ HELP = """<b>Как пользоваться</b>
 • «напиши вежливый ответ Кириллу, что перенесём на понедельник»
 • «найди в почте бронь отеля и поставь напоминание о заезде»
 
+<b>CRM</b> — пиши или присылай скрины:
+• скрин отчёта рума → бот покажет, что внесёт, и запишет после «да»
+• «сколько рейка у Шимано за сентябрь», «кому выплатить рейкбек»
+• «новый лид Иван из HH, хочет в клуб»
+• /crm_export — резервная копия
+
 <b>Команды</b>
 /today — сегодня и просрочено
 /week — ближайшие 7 дней
@@ -265,6 +271,78 @@ async def voice(m: Message):
     await process(m, text)
 
 
+# ---------- скрины и файлы → агент (разбор и внесение в CRM) ----------
+ALBUMS: dict[str, dict] = {}
+DEFAULT_FILE_TASK = ("Разбери вложение. Если это отчёт рума, статистика игроков, оплаты или другие данные для CRM — "
+                     "сопоставь с CRM и покажи, что и куда внесёшь, и спроси подтверждение. Если что-то другое — "
+                     "коротко скажи, что видишь, и спроси, что сделать.")
+
+
+async def _attachment(m: Message) -> dict | None:
+    import base64
+    if m.photo:
+        buf = await m.bot.download(m.photo[-1].file_id)
+        return {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                            "data": base64.b64encode(buf.read()).decode()}}
+    d = m.document
+    if d and d.file_size and d.file_size > 20 * 1024 * 1024:
+        return None
+    if d and (d.mime_type or "").startswith("image/") and d.mime_type in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+        buf = await m.bot.download(d.file_id)
+        return {"type": "image", "source": {"type": "base64", "media_type": d.mime_type,
+                                            "data": base64.b64encode(buf.read()).decode()}}
+    if d and d.mime_type == "application/pdf":
+        buf = await m.bot.download(d.file_id)
+        return {"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
+                                               "data": base64.b64encode(buf.read()).decode()}}
+    if d and ((d.mime_type or "").startswith("text/") or (d.file_name or "").lower().endswith((".csv", ".txt", ".tsv"))):
+        buf = await m.bot.download(d.file_id)
+        return {"type": "text", "text": f"Файл {d.file_name}:\n" + buf.read().decode("utf-8", "replace")[:60000]}
+    return None
+
+
+async def run_files(m: Message, atts: list[dict], caption: str):
+    note = await m.answer("🔎 Смотрю…")
+    instruction = caption.strip() or DEFAULT_FILE_TASK
+    rows = await core.db.recent_dialog(core.now() - __import__("datetime").timedelta(hours=3), 8)
+    hist = [(r["instruction"], r["result"]) for r in rows if r["ok"] and r["instruction"]][-4:]
+    try:
+        ans = await core.agent.run(instruction, history=hist, attachments=atts)
+        await core.db.add_dialog(f"[{len(atts)} влож.] {caption}".strip(), re.sub(r"<[^>]+>", "", ans)[:3000], True,
+                                 f"{instruction} (по присланным скринам/файлам: {len(atts)} шт.)")
+    except Exception as ex:
+        log.exception("files failed")
+        await core.db.add_dialog(f"[{len(atts)} влож.] {caption}".strip(), "ОШИБКА — не выполнено", False, instruction)
+        ans = None
+        await m.answer(f"Не получилось разобрать.\n\n<i>Причина: {e(type(ex).__name__ + ': ' + str(ex)[:300])}</i>")
+    try:
+        await note.delete()
+    except Exception:
+        pass
+    if ans:
+        await send_rich(m.bot, m.chat.id, ans)
+
+
+@owner.message(F.photo | (F.document & ~F.caption.startswith("/crm_import")))
+async def files(m: Message):
+    att = await _attachment(m)
+    if att is None:
+        await m.answer("Такой файл я пока не читаю. Пришли скрин, PDF или CSV.")
+        return
+    if not m.media_group_id:
+        await run_files(m, [att], m.caption or "")
+        return
+    # альбом: собираем все картинки, потом один разбор
+    g = ALBUMS.setdefault(m.media_group_id, {"atts": [], "caption": "", "msg": m})
+    g["atts"].append(att)
+    if m.caption:
+        g["caption"] = m.caption
+    if len(g["atts"]) == 1:
+        await asyncio.sleep(2.0)
+        g = ALBUMS.pop(m.media_group_id)
+        await run_files(g["msg"], g["atts"][:20], g["caption"])
+
+
 @owner.message(F.text & ~F.text.startswith("/"))
 async def text(m: Message):
     await process(m, m.text)
@@ -349,7 +427,7 @@ async def main():
     if C.CRM_USERS:
         import crm_web
         secret = C.CRM_SECRET or hashlib.sha256(("crm:" + C.BOT_TOKEN).encode()).hexdigest()
-        await crm_web.start(core.crm, C.CRM_USERS, secret, C.PORT)
+        await crm_web.start(core.crm, C.CRM_USERS, secret, C.PORT, C.CRM_API_TOKEN)
 
     bot = Bot(C.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     await bot.set_my_commands([

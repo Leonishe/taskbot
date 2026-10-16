@@ -136,22 +136,56 @@ class CRM:
         return (S["people"].get(pid) or {}).get("name") or "Без имени"
 
     @staticmethod
-    def rcalc(S, r: dict) -> dict:
+    def carry(S) -> dict:
+        """Минус игрока (отрицательный рейк) отыгрывается его следующим рейком по тому же руму.
+        Пока минус не закрыт, рейкбек не начисляется. carryCredit — рейк, зачтённый в минус деньгами."""
+        if "_carry" in S:
+            return S["_carry"]
+        by: dict = {}
+        for r in S["rake"].values():
+            by.setdefault(f"{r.get('personId')}|{r.get('room')}", []).append(r)
+        m, rem = {}, {}
+        for k, rs in by.items():
+            rs.sort(key=lambda r: (r.get("month") or "", r.get("createdAt") or ""))
+            pool, cur = sum(_num(r.get("carryCredit")) for r in rs), 0.0
+            for r in rs:
+                rk = _num(r.get("rake"))
+                pp = _num(r.get("payout") if r.get("payout") is not None else (S["rooms"].get(r.get("room")) or {}).get("payout", 0))
+                if rk < 0 and pp > 0:  # при 0% игроку отыгрывать нечего
+                    use = min(pool, -rk); pool -= use; cur += -rk - use
+                    m[id(r)] = {"minus": True}
+                elif cur > 0.004 and rk > 0:
+                    cov = min(rk, cur); cur -= cov
+                    m[id(r)] = {"covered": cov}
+            if cur > 0.004:
+                rem[k] = round(cur, 2)
+        S["_carry"] = {"m": m, "rem": rem}
+        return S["_carry"]
+
+    @classmethod
+    def minus_left(cls, S, pid) -> float:
+        return round(sum(v for k, v in cls.carry(S)["rem"].items() if k.split("|")[0] == pid), 2)
+
+    @classmethod
+    def rcalc(cls, S, r: dict) -> dict:
         room = S["rooms"].get(r.get("room")) or {}
         deal = r.get("deal") if r.get("deal") is not None else room.get("deal", 0)
         pay = r.get("payout") if r.get("payout") is not None else room.get("payout", 0)
         rake = _num(r.get("rake"))
+        cm = cls.carry(S)["m"].get(id(r), {})
+        base = 0.0 if cm.get("minus") else rake - cm.get("covered", 0.0)
         inc = rake * _num(deal) / 100
         of = r.get("outFixed")
-        out = _num(of) if of not in (None, "") else rake * _num(pay) / 100
+        out = _num(of) if of not in (None, "") else base * _num(pay) / 100
         rf = (S["people"].get(r.get("personId")) or {}).get("ref") or {}
         ref_pid = None
         if rf.get("pid") and _num(rf.get("pct")) and rf["pid"] in S["people"] and (
                 not rf.get("since") or r.get("month", "") >= rf["since"]):
             ref_pid = rf["pid"]
-        ref = rake * _num(rf.get("pct")) / 100 if ref_pid else 0.0
+        ref = base * _num(rf.get("pct")) / 100 if ref_pid else 0.0
         return {"deal": _num(deal), "pay": _num(pay), "inc": inc, "out": out, "ref": ref,
-                "ref_pid": ref_pid, "margin": inc - out - ref}
+                "ref_pid": ref_pid, "margin": inc - out - ref, "minus": bool(cm.get("minus")),
+                "covered": cm.get("covered", 0.0)}
 
     def club_state(self, p: dict) -> dict | None:
         c = p.get("club") or {}
@@ -219,6 +253,9 @@ class CRM:
             "rakeback_to_pay": sorted(fmt(rb), key=lambda x: -x["sum"]),
             "partners_owe": [{"partner": k, "sum": round(v["sum"], 2), "months": sorted(m for m in v["months"] if m)} for k, v in pd.items()],
             "leads_due": leads, "tasks_due": tasks, "birthdays": bdays,
+            "players_with_minus": [{"person_id": k.split("|")[0], "name": self.pname(S, k.split("|")[0]),
+                                    "room": self.room_name(S, k.split("|")[1]), "rake_left": v}
+                                   for k, v in self.carry(S)["rem"].items()],
         }
 
     def rake_report(self, S: dict, months: list[str] | None = None, person_id: str | None = None) -> dict:
@@ -235,7 +272,8 @@ class CRM:
                    "player_pct": c["pay"], "income": round(c["inc"], 2), "to_player": round(c["out"], 2),
                    "referral": round(c["ref"], 2), "referrer": self.pname(S, c["ref_pid"]) if c["ref_pid"] else None,
                    "margin": round(c["margin"], 2), "paid": bool(r.get("paid")),
-                   "partner_unpaid": bool(r.get("partnerUnpaid")), "note": r.get("note")}
+                   "partner_unpaid": bool(r.get("partnerUnpaid")), "note": r.get("note"),
+                   "player_minus_record": c["minus"], "rake_counted_against_minus": round(c["covered"], 2)}
             rows.append(row)
             x = per.setdefault(row["player"], {"rake": 0.0, "income": 0.0, "to_player": 0.0, "margin": 0.0})
             for k in x:
@@ -246,6 +284,96 @@ class CRM:
                 T["partner_unpaid"] += c["inc"]
         rows.sort(key=lambda x: (x["month"] or "", x["player"]))
         return {"totals": {k: round(v, 2) for k, v in T.items()}, "by_player": per, "rows": rows[:200]}
+
+    def payout_report(self, S: dict, month: str, only_unpaid: bool = False) -> dict:
+        """Кому и за какие ники выплатить рейкбек за месяц + по каким никам нет отчёта."""
+        import html as _h
+        esc = lambda x: _h.escape(str(x or ""))
+        money = lambda v: ("−" if v < 0 else "") + "$" + f"{abs(v):,.2f}".replace(",", " ").replace(".", ",")
+        players: dict = {}
+
+        def P(pid):
+            p = S["people"].get(pid) or {}
+            return players.setdefault(pid, {"name": p.get("name") or "Без имени", "tg": p.get("tg") or "",
+                                            "usdt": p.get("usdt") or "", "lines": [], "to_pay": 0.0, "paid": 0.0,
+                                            "missing": []})
+
+        for rid, r in S["rake"].items():
+            if r.get("month") != month:
+                continue
+            c = self.rcalc(S, r)
+            x = P(r.get("personId"))
+            room = self.room_name(S, r.get("room"))
+            line = {"nick": r.get("nick") or "—", "room": room, "rake": _num(r.get("rake")), "to_player": round(c["out"], 2),
+                    "paid": bool(r.get("paid")), "covered": round(c["covered"], 2), "minus": c["minus"], "note": r.get("note")}
+            x["lines"].append(line)
+            if c["out"] > 0.004:
+                if r.get("paid"):
+                    x["paid"] += c["out"]
+                else:
+                    x["to_pay"] += c["out"]
+            if c["ref_pid"] and abs(c["ref"]) > 0.004:
+                y = P(c["ref_pid"])
+                y["lines"].append({"nick": f"реферальные · {self.pname(S, r.get('personId'))}", "room": room,
+                                   "rake": _num(r.get("rake")), "to_player": round(c["ref"], 2),
+                                   "paid": bool(r.get("refPaid")), "covered": 0, "minus": False, "note": None})
+                if r.get("refPaid"):
+                    y["paid"] += c["ref"]
+                else:
+                    y["to_pay"] += c["ref"]
+
+        # ники на действующих сделках без отчёта за месяц
+        have = {(r.get("personId"), r.get("room")) for r in S["rake"].values() if r.get("month") == month}
+        for pid, p in S["people"].items():
+            if "eqrb" not in (p.get("tags") or []):
+                continue
+            for a in p.get("accounts") or []:
+                room = S["rooms"].get(a.get("room"))
+                if not room or room.get("active") is False or not a.get("nick"):
+                    continue
+                since = (a.get("regDate") or "")[:7]
+                if since and since > month:
+                    continue
+                if (pid, a.get("room")) not in have:
+                    P(pid)["missing"].append({"nick": a.get("nick"), "room": room.get("name")})
+
+        L = [f"<b>Рейкбек за {month}</b>"]
+        order = sorted(players.items(), key=lambda kv: (-kv[1]["to_pay"], kv[1]["name"]))
+        total_pay = total_paid = 0.0
+        missing_all = []
+        for pid, x in order:
+            if only_unpaid and x["to_pay"] <= 0.004:
+                missing_all += [(x, m) for m in x["missing"]]
+                continue
+            if not x["lines"] or (S["people"].get(pid) or {}).get("own"):
+                missing_all += [(x, m) for m in x["missing"]]  # свои аккаунты — только в «нет отчётов»
+                continue
+            total_pay += x["to_pay"]; total_paid += x["paid"]
+            head = f"\n<b>{esc(x['name'])}</b>" + (f" · {esc(x['tg'])}" if x["tg"] else "")
+            L.append(head)
+            for ln in sorted(x["lines"], key=lambda l: (l["room"], l["nick"])):
+                st = "выплачено" if ln["paid"] and ln["to_player"] > 0.004 else ("к выплате" if ln["to_player"] > 0.004 else "")
+                extra = ""
+                if ln["minus"]:
+                    extra = " · минус игрока, отыгрывается"
+                elif ln["covered"]:
+                    extra = f" · {money(ln['covered'])} рейка в счёт минуса"
+                L.append(f"• {esc(ln['nick'])} ({esc(ln['room'])}): рейк {money(ln['rake'])} → игроку {money(ln['to_player'])}"
+                         + (f" — {st}" if st else "") + extra)
+            for m in x["missing"]:
+                L.append(f"• {esc(m['nick'])} ({esc(m['room'])}): <i>нет отчёта</i>")
+            if x["to_pay"] > 0.004:
+                L.append(f"<b>К выплате: {money(x['to_pay'])}</b>" + (f" · USDT <code>{esc(x['usdt'])}</code>" if x["usdt"] else ""))
+            elif x["paid"] > 0.004:
+                L.append("Всё выплачено")
+        L.append(f"\n<b>Итого к выплате: {money(total_pay)}</b>" + (f" · уже выплачено {money(total_paid)}" if total_paid > 0.004 else ""))
+        if missing_all:
+            L.append("\n<b>Нет отчётов (игроки без записей за месяц)</b>")
+            for x, m in missing_all:
+                L.append(f"• {esc(x['name'])}" + (f" {esc(x['tg'])}" if x["tg"] else "") + f" — {esc(m['nick'])} ({esc(m['room'])})")
+        nrep = sum(len(x["missing"]) for x in players.values())
+        return {"ready_text": "\n".join(L), "total_to_pay": round(total_pay, 2), "total_paid": round(total_paid, 2),
+                "nicks_without_report": nrep}
 
     def find_people(self, S: dict, q: str) -> list[dict]:
         q = (q or "").strip().lower()
@@ -268,6 +396,7 @@ class CRM:
         return {"person_id": pid, **p, "club_status": (self.club_state(p) or {}).get("label"),
                 "payments": sorted(pays, key=lambda x: x.get("date") or "", reverse=True),
                 "rake": self.rake_report(S, person_id=pid)["rows"],
+                "minus_left_to_play_rake": self.minus_left(S, pid),
                 "tasks": [{"task_id": k, **v} for k, v in S["tasks"].items() if v.get("personId") == pid]}
 
     # ---------- действия бота ----------
@@ -284,7 +413,9 @@ class CRM:
         if dup:
             total = round(_num(dup[1].get("rake")) + rake, 2)
             await self.write("update", "rake", dup[0], {"rake": total}, by)
-            return {"ok": True, "added_to_existing": True, "rake_now": total}
+            S2 = await self.all()
+            return {"ok": True, "added_to_existing": True, "rake_now": total,
+                    "minus_left_to_play_rake": self.minus_left(S2, person_id)}
         pick = lambda k: _num(acc[k]) if acc and acc.get(k) not in ("", None) else _num(room.get(k))
         doc = {"personId": person_id, "month": month, "room": room_id, "nick": (acc or {}).get("nick", ""),
                "rake": rake, "deal": pick("deal"), "payout": pick("payout"), "paid": False, "paidDate": "",
@@ -294,8 +425,13 @@ class CRM:
         rid = uid()
         await self.write("set", "rake", rid, doc, by)
         S["rake"][rid] = doc
+        S.pop("_carry", None)
         c = self.rcalc(S, doc)
-        return {"ok": True, "id": rid, "income": round(c["inc"], 2), "to_player": round(c["out"], 2), "margin": round(c["margin"], 2)}
+        res = {"ok": True, "id": rid, "income": round(c["inc"], 2), "to_player": round(c["out"], 2), "margin": round(c["margin"], 2)}
+        if c["covered"]:
+            res["rake_counted_against_minus"] = round(c["covered"], 2)
+            res["minus_left_to_play_rake"] = self.minus_left(S, person_id)
+        return res
 
     async def mark_paid(self, person_id: str, by: str = "bot") -> dict:
         S = await self.all()

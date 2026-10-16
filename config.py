@@ -37,3 +37,4 @@ CRM_USERS = dict(x.split(":", 1) for x in os.getenv("CRM_USERS", "").split(",") 
 CRM_USERS = {k.strip().lower(): v.strip() for k, v in CRM_USERS.items()}
 CRM_SECRET = os.getenv("CRM_SECRET", "")
 PORT = int(os.getenv("PORT", "8080"))
+CRM_API_TOKEN = os.getenv("CRM_API_TOKEN", "")  # ключ для доступа Claude к CRM из чата

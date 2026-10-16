@@ -20,6 +20,14 @@ CRM (EQLBM.club + партнёрка EQRAKEBACK/EQRB) — у тебя есть �
 - Месяц рейка, если не назван, — прошлый месяц. Если неясно, какой игрок или рум (у игрока несколько сделок), спроси, а не угадывай.
 - Деньги показывай в $ с двумя знаками. После записи коротко подтверди, что именно внесено и что посчиталось.
 - Удалять записи ты не можешь — для этого Лео откроет CRM.
+- Отчёт «кому за какие ники выплатить рейкбек за <месяц>» — вызови crm_payout_report и выведи его ready_text как есть, без пересказа и без изменения цифр; можно добавить одну строку комментария в конце. Если просят только невыплаченное — only_unpaid=true.
+- Минус игрока: если рум вычел что-то из рейка (билет, бонус) и месячный рейк отрицательный, это запись с отрицательным rake. Это НЕ долг партнёра: игрок отыгрывает минус своим следующим рейком по тому же руму, и пока минус не закрыт, рейкбек ему не начисляется — CRM считает это сама (minus_left_to_play_rake, rake_counted_against_minus). Рум отчитывается полным рейком, поэтому новый рейк вноси как есть, без вычета минуса.
+- Зачесть деньги в минус (вместо выплаты игроку): у записи выплаты поставь paid=true и carryCredit = сумма/процент игроку (в рейке), и добавь note «Зачтено в минус».
+
+Скриншоты и файлы (отчёты румов, таблицы, переписка):
+- Внимательно распознай все цифры и ники. Сопоставь ники с людьми и их accounts в CRM, рум — с rooms. Месяц бери из отчёта; если его нет — прошлый месяц.
+- Перед записью в CRM покажи короткую сводку: что именно внесёшь (игрок · рум · месяц · рейк; новые люди; изменения) и что не распознал или не нашёл в CRM. Спроси «Вносить?». Записывай, только когда Лео подтвердит («да», «вноси»), — если в подписи к файлу прямо не сказано «внеси сразу».
+- Если запись за этот месяц и рум уже есть — скажи об этом и спроси, заменить или прибавить (crm_add_rake прибавляет; чтобы заменить, используй crm_update с полем rake).
 """
 
 
@@ -122,6 +130,9 @@ class Agent:
                  "input_schema": obj({"person_id": S}, ["person_id"])},
                 {"name": "crm_rake_report", "description": "Отчёт по рейку: итоги, по игрокам, строки. Фильтр по месяцам (YYYY-MM) и/или игроку.",
                  "input_schema": obj({"months": A, "person_id": S})},
+                {"name": "crm_payout_report", "description": "Отчёт по выплатам рейкбека за месяц: по каждому игроку его Telegram, "
+                 "ники по румам, рейк, сколько игроку по каждому нику, итог к выплате, USDT, и ники без отчёта. Возвращает готовый текст ready_text.",
+                 "input_schema": obj({"month": S, "only_unpaid": {"type": "boolean", "description": "только те, кому ещё не выплачено"}}, ["month"])},
                 {"name": "crm_attention", "description": "Что требует внимания: подписки к продлению, рейкбек к выплате, долги партнёров, лиды и задачи на сегодня, дни рождения.",
                  "input_schema": obj({})},
                 {"name": "crm_list", "description": "Сырые записи коллекции с id: rooms, payments, tasks, expenses.",
@@ -214,6 +225,8 @@ class Agent:
             return crm.person_card(S, a["person_id"]) or {"error": "нет такого человека"}
         if name == "crm_rake_report":
             return crm.rake_report(S, a.get("months") or None, a.get("person_id") or None)
+        if name == "crm_payout_report":
+            return crm.payout_report(S, a["month"], bool(a.get("only_unpaid")))
         if name == "crm_attention":
             return crm.attention(S)
         if name == "crm_list":
@@ -221,7 +234,8 @@ class Agent:
         return {"error": "неизвестный инструмент"}
 
     # ---------- цикл ----------
-    async def run(self, instruction: str, scheduled: bool = False, history: list[tuple[str, str]] | None = None) -> str:
+    async def run(self, instruction: str, scheduled: bool = False, history: list[tuple[str, str]] | None = None,
+                  attachments: list[dict] | None = None) -> str:
         now = self.core.now()
         messages = []
         if not scheduled:
@@ -229,7 +243,10 @@ class Agent:
                 messages += [{"role": "user", "content": q}, {"role": "assistant", "content": ans or "—"}]
         prompt = instruction if not scheduled else (
             f"Это запланированная проверка, которую ты сам поставил раньше. Выполни и коротко сообщи итог: {instruction}")
-        messages.append({"role": "user", "content": prompt})
+        if attachments:
+            messages.append({"role": "user", "content": attachments + [{"type": "text", "text": prompt}]})
+        else:
+            messages.append({"role": "user", "content": prompt})
         system = _sys(now, await self.core.areas(), bool(self.gmail), bool(self.flights), bool(self.core.cal),
                       bool(self.core.crm))
         tools = self.tools()

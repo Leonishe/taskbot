@@ -36,8 +36,9 @@ __ERR__<input name="user" placeholder="Логин" autocomplete="username" autoc
 
 
 class CRMWeb:
-    def __init__(self, crm, users: dict[str, str], secret: str):
+    def __init__(self, crm, users: dict[str, str], secret: str, api_token: str = ""):
         self.crm = crm
+        self.api_token = api_token
         self.users = users  # логин -> пароль
         self.secret = secret.encode()
 
@@ -47,6 +48,9 @@ class CRMWeb:
         return msg + "|" + hmac.new(self.secret, msg.encode(), hashlib.sha256).hexdigest()
 
     def user_of(self, req: web.Request) -> str | None:
+        auth = req.headers.get("Authorization", "")
+        if self.api_token and len(self.api_token) >= 24 and auth.startswith("Bearer "):
+            return "claude" if hmac.compare_digest(auth[7:].strip(), self.api_token) else None
         raw = req.cookies.get(COOKIE, "")
         try:
             user, exp, sig = raw.rsplit("|", 2)
@@ -129,8 +133,8 @@ class CRMWeb:
         return a
 
 
-async def start(crm, users: dict[str, str], secret: str, port: int):
-    runner = web.AppRunner(CRMWeb(crm, users, secret).app(), access_log=None)
+async def start(crm, users: dict[str, str], secret: str, port: int, api_token: str = ""):
+    runner = web.AppRunner(CRMWeb(crm, users, secret, api_token).app(), access_log=None)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", port).start()
     log.info("CRM web on :%s", port)
