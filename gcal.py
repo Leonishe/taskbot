@@ -24,12 +24,12 @@ class Calendar:
         self.minutes = event_minutes
 
     # ---- sync internals ----
-    def _list(self, day: date) -> list[dict]:
+    def _list(self, day: date, days: int = 1) -> list[dict]:
         start = datetime.combine(day, time.min, self.tz)
-        end = start + timedelta(days=1)
+        end = start + timedelta(days=days)
         r = self.s.get(f"{BASE}/calendars/{self.cal}/events", params={
             "timeMin": start.isoformat(), "timeMax": end.isoformat(),
-            "singleEvents": "true", "orderBy": "startTime", "maxResults": 50,
+            "singleEvents": "true", "orderBy": "startTime", "maxResults": 250,
         }, timeout=20)
         r.raise_for_status()
         out = []
@@ -40,10 +40,11 @@ class Calendar:
                 continue  # события бота и так видны как задачи
             st = e.get("start", {})
             if "dateTime" in st:
-                t = datetime.fromisoformat(st["dateTime"]).astimezone(self.tz).strftime("%H:%M")
+                dt = datetime.fromisoformat(st["dateTime"]).astimezone(self.tz)
+                d, t = dt.date(), dt.strftime("%H:%M")
             else:
-                t = None  # событие на весь день
-            out.append({"time": t, "title": e.get("summary") or "(без названия)"})
+                d, t = date.fromisoformat(st.get("date")), None  # событие на весь день
+            out.append({"date": d, "time": t, "title": e.get("summary") or "(без названия)"})
         return out
 
     def _body(self, title: str, start: datetime) -> dict:
@@ -78,6 +79,13 @@ class Calendar:
             return await asyncio.to_thread(self._list, day)
         except Exception:
             log.exception("calendar list failed")
+            return None
+
+    async def events_between(self, start: date, end: date) -> list[dict] | None:
+        try:
+            return await asyncio.to_thread(self._list, start, (end - start).days + 1)
+        except Exception:
+            log.exception("calendar range failed")
             return None
 
     async def create(self, title: str, start: datetime) -> str | None:

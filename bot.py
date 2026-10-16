@@ -5,6 +5,7 @@ import re
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command, CommandObject, CommandStart
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BotCommand, CallbackQuery, Message
 
 import config as C
@@ -27,6 +28,13 @@ HELP = """<b>Как пользоваться</b>
 • «перенеси созвон на пятницу»
 • «что по EQLBM?» / «что на неделе?»
 
+<b>Поручения</b> — бот сам ищет и возвращается с ответом:
+• «найди билеты в Дубай на конец ноября на неделю»
+• «а если из Москвы?» — уточнения к прошлому поручению
+• «какие документы нужны для визы в ОАЭ»
+• «напиши вежливый ответ Кириллу, что перенесём на понедельник»
+• «найди в почте бронь отеля и поставь напоминание о заезде»
+
 <b>Команды</b>
 /today — сегодня и просрочено
 /week — ближайшие 7 дней
@@ -38,9 +46,35 @@ HELP = """<b>Как пользоваться</b>
 /areas — сферы; /area_add Название; /area_del Название"""
 
 
+def _chunks(text: str, size: int = 3900) -> list[str]:
+    parts, cur = [], ""
+    for para in text.split("\n"):
+        while len(para) > size:
+            parts.append(para[:size]); para = para[size:]
+        if len(cur) + len(para) + 1 > size:
+            parts.append(cur); cur = ""
+        cur += para + "\n"
+    if cur.strip():
+        parts.append(cur)
+    return parts
+
+
+async def send_rich(bot: Bot, chat_id: int, text: str):
+    """Ответ агента: длинный, с HTML от модели — режем и страхуемся от кривой разметки."""
+    for part in _chunks(text):
+        try:
+            await bot.send_message(chat_id, part, disable_web_page_preview=True)
+        except TelegramBadRequest:
+            await bot.send_message(chat_id, re.sub(r"<[^>]+>", "", part), parse_mode=None,
+                                   disable_web_page_preview=True)
+
+
 async def send_all(bot: Bot, chat_id: int, out):
     for text, kb in out:
-        await bot.send_message(chat_id, text, reply_markup=kb)
+        if kb == "agent":
+            await send_rich(bot, chat_id, text)
+        else:
+            await bot.send_message(chat_id, text, reply_markup=kb)
 
 
 # ---------- доступ только владельцу ----------
@@ -90,13 +124,15 @@ async def done_cmd(m: Message):
 @owner.message(Command("settings"))
 async def settings(m: Message):
     cal = "подключён" if core.cal else "не подключён"
+    fl = "подключены" if core.agent and core.agent.flights else "через веб-поиск (нет TRAVELPAYOUTS_TOKEN)"
+    mail = "подключена" if core.agent and core.agent.gmail else "не подключена"
     voice = "включены" if C.GROQ_API_KEY else "выключены (нет GROQ_API_KEY)"
     await m.answer(
         f"<b>Настройки</b>\n"
         f"Утренняя сводка: {await core.morning_time():%H:%M} — /morning ЧЧ:ММ\n"
         f"Вечерний разбор: {await core.evening_time():%H:%M} — /evening ЧЧ:ММ\n"
         f"Сферы: {e(', '.join(await core.areas()))} — /areas\n"
-        f"Календарь: {cal}\nГолосовые: {voice}")
+        f"Календарь: {cal}\nГолосовые: {voice}\nБилеты: {fl}\nПочта: {mail}")
 
 
 async def _set_time(m: Message, cmd: CommandObject, key: str, label: str):
@@ -149,12 +185,22 @@ async def area_del(m: Message, command: CommandObject):
 async def process(m: Message, text: str):
     edit_id = pending_edit.pop(m.from_user.id, None)
     await m.bot.send_chat_action(m.chat.id, "typing")
+    holder = {}
+
+    async def notify(t: str):
+        holder["msg"] = await m.answer(t)
+
     try:
-        out = await core.handle_text(text, edit_task_id=edit_id)
+        out = await core.handle_text(text, edit_task_id=edit_id, notify=notify)
     except Exception:
         log.exception("parse failed")
-        await m.answer("Не получилось разобрать — сервис ИИ не ответил. Попробуй ещё раз через минуту.")
+        await m.answer("Не получилось — сервис ИИ не ответил или упал поиск. Попробуй ещё раз через минуту.")
         return
+    if holder.get("msg"):
+        try:
+            await holder["msg"].delete()
+        except Exception:
+            pass
     await send_all(m.bot, m.chat.id, out)
 
 
@@ -209,10 +255,23 @@ async def buttons(q: CallbackQuery):
 
 
 # ---------- фоновый цикл ----------
+async def run_job(bot: Bot, job):
+    try:
+        ans = await core.agent.run(job["instruction"], scheduled=True)
+        await send_rich(bot, C.OWNER_ID, "🔔 <b>Проверка по расписанию</b>\n" + ans)
+    except Exception:
+        log.exception("job failed")
+        await bot.send_message(C.OWNER_ID, "Не смог выполнить запланированную проверку: "
+                               + e(job["instruction"][:300]))
+
+
 async def scheduler(bot: Bot):
     while True:
         try:
             await send_all(bot, C.OWNER_ID, await core.tick())
+            if core.agent:
+                for job in await core.db.take_due_jobs(core.now()):
+                    asyncio.create_task(run_job(bot, job))
         except Exception:
             log.exception("tick failed")
         await asyncio.sleep(30)
@@ -232,6 +291,17 @@ async def main():
         log.info("calendar enabled")
     core = Core(db, C.TZ, C.DEFAULT_AREAS, C.DEFAULT_MORNING, C.DEFAULT_EVENING,
                 parser=Parser(C.ANTHROPIC_API_KEY, C.CLAUDE_MODEL, C.DAY_START_HOUR), cal=cal)
+    flights = gmail = None
+    if C.TRAVELPAYOUTS_TOKEN:
+        from flights import Flights
+        flights = Flights(C.TRAVELPAYOUTS_TOKEN)
+        log.info("flights enabled")
+    if C.GOOGLE_SERVICE_ACCOUNT_JSON and C.GMAIL_USER:
+        from gmail import Gmail
+        gmail = Gmail(C.GOOGLE_SERVICE_ACCOUNT_JSON, C.GMAIL_USER)
+        log.info("gmail enabled")
+    from agent import Agent
+    core.agent = Agent(C.ANTHROPIC_API_KEY, C.AGENT_MODEL, core, flights=flights, gmail=gmail)
 
     bot = Bot(C.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     await bot.set_my_commands([

@@ -32,6 +32,7 @@ def parse_date(s) -> date | None:
 class Core:
     def __init__(self, db, tz, default_areas, default_morning, default_evening, parser=None, cal=None):
         self.db, self.tz, self.parser, self.cal = db, tz, parser, cal
+        self.agent = None  # подключается в bot.py
         self.default_areas = default_areas
         self.default_morning, self.default_evening = default_morning, default_evening
         self.history: deque = deque(maxlen=6)  # (время, строка контекста)
@@ -237,7 +238,7 @@ class Core:
         return [("✏️ Обновил\n" + self.card(t), self.kb_new(t["id"]))]
 
     # ---------- свободный текст ----------
-    async def handle_text(self, text: str, edit_task_id: int | None = None) -> Out:
+    async def handle_text(self, text: str, edit_task_id: int | None = None, notify=None) -> Out:
         now = self.now()
         tasks = await self.db.open_tasks()
         if edit_task_id:
@@ -248,12 +249,12 @@ class Core:
                         f"Используй edit с task_id={t['id']}. Поправка: {text}")
         recent = [line for ts, line in self.history if now - ts < timedelta(minutes=20)]
         res = await self.parser.parse(text, now, await self.areas(), tasks, recent)
-        out = await self.apply(res)
-        done = "; ".join(html.unescape(re.sub(r"<[^>]+>", "", t)).replace("\n", " ") for t, _ in out)
+        out = await self.apply(res, notify)
+        done = "; ".join(html.unescape(re.sub(r"<[^>]+>", "", t)).replace("\n", " ") for t, _ in out)[:400]
         self.history.append((now, f"[{now:%H:%M}] «{text}» → {done}"))
         return out
 
-    async def apply(self, res: dict) -> Out:
+    async def apply(self, res: dict, notify=None) -> Out:
         out: Out = []
         for a in res.get("actions") or []:
             typ = a.get("type")
@@ -269,6 +270,13 @@ class Core:
             elif typ == "edit" and tid:
                 a = {k: v for k, v in a.items() if k in ("title", "area", "due_date", "time")}
                 out += await self.edit(tid, a)
+            elif typ == "delegate" and a.get("instruction"):
+                if not self.agent:
+                    out.append(("Режим поручений не подключён.", None))
+                    continue
+                if notify:
+                    await notify("🔎 Принял, работаю…")
+                out.append((await self.agent.run(a["instruction"]), "agent"))
             elif typ == "list":
                 out.append((await self.list_text(a.get("period") or "all", a.get("area")), None))
         if not out:

@@ -18,6 +18,12 @@ create table if not exists tasks (
     done_at       timestamptz
 );
 create index if not exists tasks_open_idx on tasks (status, due_date);
+create table if not exists jobs (
+    id          serial primary key,
+    run_at      timestamptz not null,
+    instruction text not null,
+    done        boolean not null default false
+);
 create table if not exists settings (
     key   text primary key,
     value text not null
@@ -88,3 +94,12 @@ class DB:
         return await self.pool.fetch(
             "select * from tasks where status='open' and not reminded "
             "and coalesce(snooze_at, remind_at) <= $1 order by coalesce(snooze_at, remind_at)", now)
+
+    # ---- отложенные поручения агенту ----
+    async def add_job(self, run_at: datetime, instruction: str) -> int:
+        return await self.pool.fetchval(
+            "insert into jobs(run_at, instruction) values($1,$2) returning id", run_at, instruction)
+
+    async def take_due_jobs(self, now: datetime) -> list[asyncpg.Record]:
+        return await self.pool.fetch(
+            "update jobs set done=true where not done and run_at <= $1 returning *", now)

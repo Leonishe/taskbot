@@ -17,13 +17,14 @@ TOOL = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "type": {"type": "string", "enum": ["add", "complete", "edit", "delete", "list"]},
+                        "type": {"type": "string", "enum": ["add", "complete", "edit", "delete", "list", "delegate"]},
                         "task_id": {"type": "integer", "description": "Для complete/edit/delete: id существующей задачи"},
                         "title": {"type": "string", "description": "Короткая формулировка задачи, с глагола, без даты и времени"},
                         "area": {"type": "string", "description": "Одна из сфер пользователя"},
                         "due_date": {"type": "string", "description": "YYYY-MM-DD или пустая строка, если срока нет"},
                         "time": {"type": "string", "description": "HH:MM, если названо конкретное время, иначе пустая строка"},
                         "period": {"type": "string", "enum": ["today", "tomorrow", "week", "overdue", "all"]},
+                        "instruction": {"type": "string", "description": "Для delegate: полное поручение ассистенту"},
                     },
                     "required": ["type"],
                 },
@@ -56,7 +57,7 @@ def build_system(now: datetime, areas: list[str], tasks: list, history: list[str
         f"#{t['id']} | {t['title']} | {t['area'] or '-'} | {t['due_date'] or 'без срока'}"
         for t in tasks[:150]) or "(задач нет)"
     hist = "\n".join(history or []) or "(нет)"
-    return f"""Ты — разборщик сообщений в Telegram-боте задач. Пользователь пишет коротко, по-русски, как в заметки, часто голосом.
+    return f"""Ты — диспетчер сообщений в Telegram-боте задач и поручений. Пользователь пишет коротко, по-русски, как в заметки, часто голосом.
 Сейчас: {now.strftime('%Y-%m-%d %H:%M')}, {WEEKDAYS[now.weekday()]}.
 {night_rule}
 Календарь на ближайшие дни:
@@ -82,6 +83,7 @@ def build_system(now: datetime, areas: list[str], tasks: list, history: list[str
 - Просьба перенести/изменить задачу → "edit" с task_id и только изменёнными полями; неизменённые поля не передавай. Чтобы убрать срок или время, передай в due_date или time значение "none".
 - Просьба удалить → "delete".
 - Вопрос «что у меня…», «что по EQLBM», «что на неделе» → "list" с period и, если названа, area.
+- Поручение, которое надо выполнить сейчас — найти, узнать, подобрать, сравнить, посчитать, написать текст, проверить почту или календарь, ответить на вопрос о мире («найди билеты в Дубай на конец ноября», «какие документы нужны для визы в ОАЭ», «напиши ответ Кириллу») → один "delegate" с instruction: поручение словами пользователя плюс нужный контекст. Продолжение недавнего поручения («а из Москвы?», «беру второй», «а подешевле?») — тоже "delegate". Но «до пятницы купить билеты» — это обычная задача "add" на будущее.
 - Если не понятно, к какой задаче относится complete/edit/delete — не угадывай, верни пустой actions и короткий вопрос в reply.
 Всегда отвечай вызовом apply_actions."""
 

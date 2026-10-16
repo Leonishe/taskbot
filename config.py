@@ -25,3 +25,8 @@ DEFAULT_EVENING = "18:00"
 
 # До этого часа «сегодня/завтра» считаются днём после сна (ты ещё не ложился).
 DAY_START_HOUR = int(os.getenv("DAY_START_HOUR", "6"))
+
+# Поручения (агент)
+AGENT_MODEL = os.getenv("AGENT_MODEL", "claude-sonnet-5-5")
+TRAVELPAYOUTS_TOKEN = os.getenv("TRAVELPAYOUTS_TOKEN", "")
+GMAIL_USER = os.getenv("GMAIL_USER", "")  # ящик Workspace, напр. poker@eqlbm.club
