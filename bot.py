@@ -94,7 +94,8 @@ async def start(m: Message):
         return
     if m.from_user.id != C.OWNER_ID:
         return
-    await m.answer("Привет, Лео. Я держу твои задачи.\n\n" + HELP)
+    nm = await core.db.get("bot_name", "")
+    await m.answer(f"Привет, Лео{'. Это ' + e(nm) if nm else ''}. Я держу твои задачи.\n\n" + HELP)
 
 
 owner = Router()

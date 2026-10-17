@@ -31,8 +31,14 @@ CRM (EQLBM.club + партнёрка EQRAKEBACK/EQRB) — у тебя есть �
 """
 
 
-def _sys(now: datetime, areas: list[str], has_mail: bool, has_flights: bool, has_cal: bool, has_crm: bool = False) -> str:
-    return f"""Ты — личный ассистент Лео в его Telegram-боте. Лео — профессиональный покерист и предприниматель (клуб EQLBM), живёт в Беларуси, часовой пояс Минска. Сейчас {now:%Y-%m-%d %H:%M}, {WEEKDAYS[now.weekday()]}.
+def _sys(now: datetime, areas: list[str], has_mail: bool, has_flights: bool, has_cal: bool, has_crm: bool = False,
+         name: str = "") -> str:
+    who = (f"Тебя зовут {name}. Это имя ты выбрал(а) сам(а) — держись его и соответствующего рода в речи."
+           if name else "Имени у тебя пока нет. Если Лео спросит, как тебя зовут или как бы ты назвался, выбери себе "
+                        "имя сам — короткое, живое, не «Диспетчер», не «Ассистент», — объясни выбор одной фразой и сохрани "
+                        "его через set_name. Если Лео сам предложит имя — прими его и сохрани.")
+    return f"""Ты — личный ассистент Лео в его Telegram-боте. {who}
+Общаешься на «ты», живо и коротко, как толковый помощник, а не как справочная. На личные вопросы отвечаешь по-человечески, с характером, без канцелярита. Не повторяй одно и то же и не добавляй в конце список задач или «а по делам…», если об этом не спрашивали. Лео — профессиональный покерист и предприниматель (клуб EQLBM), живёт в Беларуси, часовой пояс Минска. Сейчас {now:%Y-%m-%d %H:%M}, {WEEKDAYS[now.weekday()]}.
 
 Ты выполняешь поручения: ищешь информацию, билеты, отели, сравниваешь варианты, готовишь тексты, работаешь с его задачами и календарём{', читаешь его почту' if has_mail else ''}. Доводи дело до результата сам, используя инструменты, а не советуй «поищите на сайте».
 
@@ -84,6 +90,8 @@ class Agent:
                  "due_date": {"type": "string", "description": "YYYY-MM-DD или пусто"},
                  "time": {"type": "string", "description": "HH:MM или пусто — время напоминания"}},
                  "required": ["title"]}},
+            {"name": "set_name", "description": "Сохранить твоё имя (выбранное тобой или предложенное Лео).",
+             "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
             {"name": "list_tasks", "description": "Открытые задачи Лео.",
              "input_schema": {"type": "object", "properties": {
                  "period": {"type": "string", "enum": ["today", "tomorrow", "week", "overdue", "all"]},
@@ -169,6 +177,12 @@ class Agent:
             t = await c.add(a["title"], await c.match_area(a.get("area")),
                             parse_date(a.get("due_date")), parse_hhmm(a.get("time") or ""))
             return {"ok": True, "task_id": t["id"], "in_calendar": bool(t["gcal_event_id"])}
+        if name == "set_name":
+            nm = (a.get("name") or "").strip()[:30]
+            if not nm:
+                return {"error": "пустое имя"}
+            await c.db.set("bot_name", nm)
+            return {"ok": True, "name": nm}
         if name == "list_tasks":
             import re
             return {"text": re.sub(r"<[^>]+>", "", await c.list_text(a.get("period") or "all", a.get("area")))}
@@ -248,7 +262,7 @@ class Agent:
         else:
             messages.append({"role": "user", "content": prompt})
         system = _sys(now, await self.core.areas(), bool(self.gmail), bool(self.flights), bool(self.core.cal),
-                      bool(self.core.crm))
+                      bool(self.core.crm), await self.core.db.get("bot_name", "") or "")
         tools = self.tools()
         texts: list[str] = []
         for _ in range(self.max_steps):
